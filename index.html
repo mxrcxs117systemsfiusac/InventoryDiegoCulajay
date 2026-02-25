@@ -6,33 +6,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Inventario Diego Culajay</title>
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#10b981">
+    <meta name="theme-color" content="#ffffff">
 
-    <!-- Google Fonts -->
+    <!-- Google Fonts: Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
-            darkMode: 'class',
+            darkMode: 'class', // Keeping class just in case, but defaulting to Light as per prompt
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
                     },
                     colors: {
-                        brand: {
-                            50: '#ecfdf5',
-                            100: '#d1fae5',
-                            500: '#10b981',
-                            600: '#059669',
-                            900: '#064e3b',
+                        ios: {
+                            bg: '#FFFFFF',
+                            sec: '#F8F9FA',
+                            textTitle: '#111111',
+                            textSub: '#8E8E93',
+                            border: '#E5E5EA',
+                            black: '#000000'
                         },
                         status: {
-                            safe: '#10b981', // green
-                            warning: '#f59e0b', // yellow
-                            danger: '#ef4444' // red
+                            safe: '#34C759', // iOS Green
+                            warning: '#FF9500', // iOS Orange
+                            danger: '#FF3B30' // iOS Red
                         }
                     }
                 }
@@ -45,286 +46,312 @@
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* iOS Minimalist overrides */
+        body {
+            background-color: #FFFFFF;
+            color: #111111;
+        }
+
+        .ios-input {
+            border: none;
+            border-bottom: 1px solid #E5E5EA;
+            border-radius: 0;
+            background: transparent;
+            padding: 12px 0;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .ios-input:focus {
+            border-bottom-color: #000000;
+        }
+
+        /* Viewfinder for Scanner */
+        #reader__scan_region {
+            position: relative;
+        }
+
+        #reader__scan_region::after {
+            content: '';
+            position: absolute;
+            top: 10%;
+            bottom: 10%;
+            left: 10%;
+            right: 10%;
+            border: 4px solid #FFFFFF;
+            border-radius: 20px;
+            box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+        }
+    </style>
 </head>
 
-<body
-    class="bg-gray-50 text-gray-800 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-200 antialiased pb-safe">
+<body class="font-sans antialiased pb-safe">
 
     <!-- Header -->
     <header
-        class="sticky top-0 z-30 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-200">
-        <div class="container mx-auto px-4 h-16 flex items-center justify-between">
-            <div class="flex items-center gap-2 text-brand-500">
-                <i class="fa-solid fa-box-open text-2xl drop-shadow-sm"></i>
-                <h1 class="font-bold text-xl tracking-tight hidden sm:block text-gray-900 dark:text-white">Inventario
-                    Doméstico</h1>
-                <h1 class="font-bold text-xl tracking-tight sm:hidden text-gray-900 dark:text-white">Inventario</h1>
-            </div>
-            <div class="flex items-center gap-4">
-                <button id="theme-toggle"
-                    class="p-2 w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition">
-                    <i class="fa-solid fa-moon text-xl dark:hidden text-gray-600"></i>
-                    <i class="fa-solid fa-sun text-xl hidden dark:block text-yellow-400"></i>
-                </button>
-            </div>
+        class="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-ios-border transition-colors duration-200">
+        <div class="container mx-auto px-4 h-14 flex items-center justify-between">
+            <button id="btn-menu-toggle" class="p-2 -ml-2 text-ios-textTitle focus:outline-none">
+                <i class="fa-solid fa-bars text-xl"></i>
+            </button>
+            <h1 class="font-semibold text-lg tracking-tight text-ios-textTitle">Inventario</h1>
+            <div class="w-8"></div> <!-- Spacer to center title -->
         </div>
     </header>
 
+    <!-- Side Menu Overlay -->
+    <div id="side-menu" class="fixed inset-0 z-50 hidden opacity-0 transition-opacity duration-300">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" id="side-menu-bg"></div>
+        <div class="absolute inset-y-0 left-0 w-64 bg-ios-sec shadow-2xl transform transition-transform duration-300 -translate-x-full flex flex-col pt-14"
+            id="side-menu-panel">
+            <h2 class="px-6 py-4 text-xs font-bold text-ios-textSub uppercase tracking-wider">Menú</h2>
+            <nav class="flex flex-col gap-1 px-4">
+                <button
+                    class="nav-btn active flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium hover:bg-white transition-colors"
+                    data-target="view-dashboard">
+                    <i class="fa-solid fa-chart-pie w-6"></i> Resumen
+                </button>
+                <button
+                    class="nav-btn flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium hover:bg-white transition-colors text-ios-textTitle"
+                    data-target="view-inventory">
+                    <i class="fa-solid fa-layer-group w-6"></i> Lista
+                </button>
+                <button
+                    class="nav-btn flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium hover:bg-white transition-colors text-ios-textTitle"
+                    data-target="view-history">
+                    <i class="fa-solid fa-clock-rotate-left w-6"></i> Historial
+                </button>
+                <button
+                    class="nav-btn flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium hover:bg-white transition-colors text-ios-textTitle"
+                    data-target="view-about">
+                    <i class="fa-solid fa-circle-info w-6"></i> Acerca de
+                </button>
+            </nav>
+        </div>
+    </div>
+
     <!-- Main Content -->
-    <main class="container mx-auto px-4 py-6 max-w-5xl mb-20" id="app-content">
+    <main class="container mx-auto px-4 py-6 max-w-2xl mb-24" id="app-content">
         <!-- View: Dashboard -->
         <section id="view-dashboard" class="view-section block animate-fade-in">
-            <div class="mb-6">
-                <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Resumen Mensual</h2>
-                <p class="text-gray-600 dark:text-gray-400 text-sm">Monitorea el estado general de tus productos</p>
+            <div class="mb-8 text-center pt-4">
+                <h2 class="text-3xl font-bold text-ios-textTitle">Monitoreo</h2>
+                <p class="text-ios-textSub text-sm mt-1">Estado de tu despensa</p>
             </div>
 
             <!-- Stats Grid -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <div
-                    class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-center items-center text-center transform transition-transform hover:scale-105">
-                    <span class="text-gray-500 dark:text-gray-400 text-sm font-medium mb-1">Total Registrados</span>
-                    <span class="text-3xl font-bold text-blue-500" id="stat-total">0</span>
+            <div class="grid grid-cols-2 gap-4 mb-8">
+                <div class="bg-ios-sec rounded-3xl p-6 flex flex-col justify-center items-center text-center">
+                    <span class="text-3xl font-bold text-ios-textTitle" id="stat-total">0</span>
+                    <span class="text-ios-textSub text-xs font-medium uppercase tracking-wider mt-2">Total</span>
                 </div>
-                <div
-                    class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-green-100 dark:border-green-900/40 flex flex-col justify-center items-center text-center transform transition-transform hover:scale-105">
-                    <span class="text-green-600 dark:text-green-400 text-sm font-medium mb-1">Seguros (>7 días)</span>
+                <div class="bg-ios-sec rounded-3xl p-6 flex flex-col justify-center items-center text-center">
                     <span class="text-3xl font-bold text-status-safe" id="stat-safe">0</span>
+                    <span class="text-ios-textSub text-xs font-medium uppercase tracking-wider mt-2">Seguros</span>
                 </div>
-                <div
-                    class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-yellow-100 dark:border-yellow-900/40 flex flex-col justify-center items-center text-center transform transition-transform hover:scale-105">
-                    <span class="text-yellow-600 dark:text-yellow-400 text-sm font-medium mb-1">Próximos (≤7
-                        días)</span>
+                <div class="bg-ios-sec rounded-3xl p-6 flex flex-col justify-center items-center text-center">
                     <span class="text-3xl font-bold text-status-warning" id="stat-warning">0</span>
+                    <span class="text-ios-textSub text-xs font-medium uppercase tracking-wider mt-2">Por Vencer</span>
                 </div>
-                <div
-                    class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-red-100 dark:border-red-900/40 flex flex-col justify-center items-center text-center transform transition-transform hover:scale-105">
-                    <span class="text-red-500 dark:text-red-400 text-sm font-medium mb-1">Vencidas</span>
+                <div class="bg-ios-sec rounded-3xl p-6 flex flex-col justify-center items-center text-center">
                     <span class="text-3xl font-bold text-status-danger" id="stat-danger">0</span>
+                    <span class="text-ios-textSub text-xs font-medium uppercase tracking-wider mt-2">Vencidos</span>
                 </div>
             </div>
 
+            <div class="bg-ios-sec rounded-3xl p-6 mb-8 text-center">
+                <p class="text-ios-textSub text-xs font-medium uppercase tracking-wider mb-2">Pérdida Económica</p>
+                <div class="text-4xl font-black text-status-danger" id="stat-loss">$0.00</div>
+            </div>
+
             <!-- Alerts Panel -->
-            <div
-                class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 mb-8 overflow-hidden">
-                <div
-                    class="bg-gray-50 dark:bg-gray-900/50 px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                    <h3 class="font-semibold text-gray-800 dark:text-white flex items-center gap-2">
-                        <i class="fa-solid fa-bell text-status-warning animate-pulse"></i> Alertas de Vencimiento
-                    </h3>
-                </div>
-                <div class="p-0" id="alerts-container">
+            <div class="mb-8">
+                <h3 class="font-bold text-lg text-ios-textTitle mb-4 px-2">Alertas</h3>
+                <div class="p-0 border-t border-ios-border" id="alerts-container">
                     <!-- Alerts injected here -->
-                    <div class="text-center text-gray-400 py-6 italic text-sm">Escaneando estado...</div>
+                    <div class="text-center text-ios-textSub py-6 text-sm">Escaneando estado...</div>
                 </div>
             </div>
 
             <!-- Charts -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div
-                    class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                    <h3 class="text-sm font-bold text-gray-700 dark:text-gray-300 mb-4 text-center">Desglose por
-                        Categoría</h3>
-                    <div class="relative h-64 w-full flex justify-center">
+            <div class="space-y-8">
+                <div>
+                    <h3 class="text-sm font-semibold text-ios-textSub uppercase mb-4 px-2">Desglose por Categoría</h3>
+                    <div class="relative h-64 w-full">
                         <canvas id="categoryChart"></canvas>
                     </div>
                 </div>
-                <div
-                    class="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                    <h3 class="text-sm font-bold text-gray-700 dark:text-gray-300 mb-4 text-center">Tendencia de
-                        Vencidos</h3>
-                    <div class="relative h-64 w-full flex justify-center">
+                <div>
+                    <h3 class="text-sm font-semibold text-ios-textSub uppercase mb-4 px-2">Tendencia de Vencidos</h3>
+                    <div class="relative h-64 w-full">
                         <canvas id="expiredChart"></canvas>
                     </div>
                 </div>
-            </div>
-
-            <div
-                class="mt-8 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 border border-red-100 dark:border-red-800/30">
-                <div>
-                    <h3 class="font-bold text-red-800 dark:text-red-400 flex items-center gap-2 text-lg">
-                        <i class="fa-solid fa-money-bill-trend-up"></i> Pérdida Económica Estimada
-                    </h3>
-                    <p class="text-sm text-red-600 dark:text-red-300 mt-1">Suma del valor de productos desperdiciados en
-                        el historial.</p>
-                </div>
-                <div class="text-3xl font-black text-red-600 dark:text-red-400" id="stat-loss">$0.00</div>
             </div>
         </section>
 
         <!-- View: Inventory List -->
         <section id="view-inventory" class="view-section hidden animate-fade-in">
-            <div class="mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Inventario Actual</h2>
-                    <p class="text-gray-600 dark:text-gray-400 text-sm">Gestiona y actualiza tus productos</p>
-                </div>
-                <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                    <select id="filter-category"
-                        class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-sm rounded-xl focus:ring-brand-500 focus:border-brand-500 block w-full p-3 sm:p-2.5 shadow-sm">
-                        <option value="all">Todas las Categorías</option>
-                        <option value="Lácteos">Lácteos</option>
-                        <option value="Carnes">Carnes</option>
-                        <option value="Verduras">Verduras</option>
-                        <option value="Bebidas">Bebidas</option>
-                        <option value="Limpieza">Limpieza</option>
-                        <option value="Otros">Otros</option>
-                    </select>
-                    <select id="filter-status"
-                        class="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-sm rounded-xl focus:ring-brand-500 focus:border-brand-500 block w-full p-3 sm:p-2.5 shadow-sm">
-                        <option value="all">Todos los Estados</option>
-                        <option value="safe">Seguros</option>
-                        <option value="warning">Por Vencer</option>
-                        <option value="danger">Vencidos</option>
-                    </select>
-                </div>
+            <div class="mb-6 pt-4 text-center">
+                <h2 class="text-3xl font-bold text-ios-textTitle">Lista</h2>
+            </div>
+
+            <div class="flex gap-3 mb-6">
+                <select id="filter-category"
+                    class="bg-ios-sec text-ios-textTitle text-sm rounded-xl block w-full p-3 font-medium outline-none appearance-none border border-transparent focus:border-ios-border transition">
+                    <option value="all">Todas las Categorías</option>
+                    <option value="Lácteos">Lácteos</option>
+                    <option value="Carnes">Carnes</option>
+                    <option value="Verduras">Verduras</option>
+                    <option value="Bebidas">Bebidas</option>
+                    <option value="Limpieza">Limpieza</option>
+                    <option value="Otros">Otros</option>
+                </select>
+                <select id="filter-status"
+                    class="bg-ios-sec text-ios-textTitle text-sm rounded-xl block w-full p-3 font-medium outline-none appearance-none border border-transparent focus:border-ios-border transition">
+                    <option value="all">Filtro Estado</option>
+                    <option value="safe">Seguros</option>
+                    <option value="warning">Próximos</option>
+                    <option value="danger">Vencidos</option>
+                </select>
             </div>
 
             <!-- List Container -->
-            <div id="inventory-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div id="inventory-list" class="flex flex-col">
                 <!-- Loader placeholder -->
-                <div class="col-span-full flex justify-center py-10">
-                    <i class="fa-solid fa-spinner fa-spin text-3xl text-brand-500"></i>
+                <div class="flex justify-center py-10">
+                    <i class="fa-solid fa-spinner fa-spin text-3xl text-ios-border"></i>
                 </div>
             </div>
         </section>
 
         <!-- View: History -->
         <section id="view-history" class="view-section hidden animate-fade-in">
-            <div class="mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Historial</h2>
-                    <p class="text-gray-600 dark:text-gray-400 text-sm">Registro de consumo y desperdicio</p>
-                </div>
-                <div class="flex gap-3 w-full sm:w-auto">
-                    <button id="btn-export-excel"
-                        class="flex-1 bg-green-600 hover:bg-green-700 text-white rounded-xl px-4 py-3 sm:py-2.5 hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 text-sm font-medium">
-                        <i class="fa-solid fa-file-excel text-lg"></i> <span>Exportar</span>
-                    </button>
-                    <button id="btn-import-excel"
-                        class="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-3 sm:py-2.5 hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 text-sm font-medium">
-                        <i class="fa-solid fa-file-import text-lg"></i> <span>Importar</span>
-                    </button>
-                    <!-- Input oculto para archivo excel -->
-                    <input type="file" id="excel-file-input" class="hidden" accept=".xlsx, .xls">
-                </div>
+            <div class="mb-8 pt-4 text-center">
+                <h2 class="text-3xl font-bold text-ios-textTitle">Historial</h2>
             </div>
 
-            <!-- History List -->
-            <div
-                class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                        <thead
-                            class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700/50 dark:text-gray-400">
-                            <tr>
-                                <th scope="col" class="px-6 py-4 rounded-tl-lg">Producto</th>
-                                <th scope="col" class="px-6 py-4 hidden sm:table-cell">Categoría</th>
-                                <th scope="col" class="px-6 py-4 text-center">Resultado</th>
-                                <th scope="col" class="px-6 py-4 text-right rounded-tr-lg">Pérdida</th>
-                            </tr>
-                        </thead>
-                        <tbody id="history-list">
-                            <!-- Items injected here -->
-                            <tr class="border-b dark:border-gray-700">
-                                <td colspan="4" class="px-6 py-12 text-center">
-                                    <i class="fa-solid fa-spinner fa-spin text-2xl text-brand-500"></i>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+            <div class="flex gap-3 mb-6 justify-center">
+                <button id="btn-export-excel"
+                    class="bg-ios-sec hover:bg-gray-200 text-ios-textTitle rounded-full px-5 py-2 transition-all flex items-center justify-center gap-2 text-sm font-semibold">
+                    <i class="fa-solid fa-arrow-up-from-bracket"></i> Exportar
+                </button>
+                <button id="btn-import-excel"
+                    class="bg-ios-sec hover:bg-gray-200 text-ios-textTitle rounded-full px-5 py-2 transition-all flex items-center justify-center gap-2 text-sm font-semibold">
+                    <i class="fa-solid fa-arrow-down"></i> Importar
+                </button>
+                <input type="file" id="excel-file-input" class="hidden" accept=".xlsx, .xls">
+            </div>
+
+            <div class="border-t border-ios-border" id="history-list">
+                <!-- Items injected here -->
+            </div>
+        </section>
+
+        <!-- View: About -->
+        <section id="view-about" class="view-section hidden animate-fade-in">
+            <div class="mb-8 pt-4 text-center">
+                <h2 class="text-3xl font-bold text-ios-textTitle">Acerca de</h2>
+            </div>
+
+            <div class="bg-ios-sec rounded-[24px] p-8 text-center max-w-md mx-auto relative overflow-hidden">
+                <!-- Decoración -->
+                <div
+                    class="absolute top-0 right-0 w-32 h-32 bg-gray-200 rounded-full blur-3xl opacity-50 -mr-10 -mt-10">
+                </div>
+
+                <div class="w-20 h-20 mx-auto bg-white rounded-2xl shadow-sm mb-6 flex items-center justify-center">
+                    <i class="fa-solid fa-graduation-cap text-3xl text-ios-textTitle"></i>
+                </div>
+
+                <h3 class="text-2xl font-bold text-ios-textTitle mb-1">Diego Javier Culajay</h3>
+                <p class="text-ios-textSub text-sm mb-6 font-medium">Desarrollador</p>
+
+                <div
+                    class="space-y-4 text-sm text-left bg-white rounded-2xl p-5 shadow-sm border border-ios-border relative z-10">
+                    <div class="flex justify-between border-b border-ios-border pb-3">
+                        <span class="text-ios-textSub">Institución</span>
+                        <span class="font-semibold text-ios-textTitle text-right min-w-[50%]">Universidad de San Carlos
+                            de Guatemala</span>
+                    </div>
+                    <div class="flex justify-between border-b border-ios-border pb-3">
+                        <span class="text-ios-textSub">Facultad</span>
+                        <span class="font-semibold text-ios-textTitle text-right min-w-[50%]">Facultad de
+                            Ingeniería</span>
+                    </div>
+                    <div class="flex justify-between border-b border-ios-border pb-3">
+                        <span class="text-ios-textSub">Carrera</span>
+                        <span class="font-semibold text-ios-textTitle text-right">Ingeniería Industrial</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-ios-textSub">Carnet</span>
+                        <span class="font-semibold text-ios-textTitle text-right">Pendiente</span>
+                    </div>
+                </div>
+
+                <div class="mt-8">
+                    <a href="https://github.com/diegoculajay" target="_blank"
+                        class="inline-block bg-ios-black px-6 py-3 rounded-full text-white font-semibold text-sm hover:opacity-80 transition shadow-md">
+                        <i class="fa-brands fa-github mr-2"></i> Ver GitHub
+                    </a>
                 </div>
             </div>
         </section>
 
     </main>
 
-    <!-- Bottom Navigation -->
-    <nav
-        class="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-lg border-t border-gray-200 dark:border-gray-700 z-40 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <div class="container mx-auto max-w-md px-6 flex justify-between items-center h-16 relative">
-
-            <button
-                class="nav-btn active flex flex-col items-center justify-center w-16 h-full text-gray-400 transition-colors"
-                data-target="view-dashboard">
-                <i class="fa-solid fa-chart-pie text-xl mb-1 transition-transform"></i>
-                <span class="text-[10px] font-semibold">Dashboard</span>
-            </button>
-
-            <button
-                class="nav-btn flex flex-col items-center justify-center w-16 h-full text-gray-400 transition-colors"
-                data-target="view-inventory">
-                <i class="fa-solid fa-layer-group text-xl mb-1 transition-transform"></i>
-                <span class="text-[10px] font-semibold">Lista</span>
-            </button>
-
-            <!-- Spacer for FAB -->
-            <div class="w-16"></div>
-
-            <button
-                class="nav-btn flex flex-col items-center justify-center w-16 h-full text-gray-400 transition-colors"
-                data-target="view-history">
-                <i class="fa-solid fa-clock-rotate-left text-xl mb-1 transition-transform"></i>
-                <span class="text-[10px] font-semibold">Historial</span>
-            </button>
-        </div>
-    </nav>
-
     <!-- Floating Action Button -->
     <button id="btn-add"
-        class="fixed bottom-6 left-1/2 -translate-x-1/2 w-16 h-16 bg-brand-500 hover:bg-brand-600 text-white rounded-full shadow-[0_8px_30px_rgb(16,185,129,0.4)] flex items-center justify-center text-2xl z-50 transform hover:scale-110 active:scale-95 transition-all duration-200 border-4 border-white dark:border-gray-900">
+        class="fixed bottom-8 right-6 w-14 h-14 bg-ios-black text-white rounded-full shadow-lg flex items-center justify-center text-xl z-40 transform hover:scale-105 active:scale-95 transition-all">
         <i class="fa-solid fa-plus"></i>
     </button>
 
     <!-- Modal: Add Product -->
     <div id="modal-add" class="fixed inset-0 z-[60] hidden opacity-0 transition-opacity duration-300">
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" id="modal-bg"></div>
-        <div class="absolute inset-x-0 bottom-0 bg-white dark:bg-gray-800 rounded-t-[2.5rem] shadow-2xl transform transition-transform duration-300 translate-y-full flex flex-col max-h-[90vh]"
+        <div class="absolute inset-0 bg-black/30 backdrop-blur-sm" id="modal-bg"></div>
+        <div class="absolute inset-x-0 bottom-0 bg-white rounded-t-[32px] shadow-2xl transform transition-transform duration-300 translate-y-full flex flex-col max-h-[90vh]"
             id="modal-panel">
             <div class="w-full flex justify-center pt-4 pb-2 shrink-0">
-                <div class="w-16 h-1.5 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
+                <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
             </div>
 
-            <div class="px-6 pb-6 overflow-y-auto pb-safe flex-1">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-2xl font-bold text-gray-900 dark:text-white" id="modal-title">Nuevo Producto</h3>
+            <div class="px-6 pb-8 overflow-y-auto pb-safe flex-1">
+                <div class="flex justify-between items-center mb-6 pt-2">
+                    <h3 class="text-2xl font-bold text-ios-textTitle" id="modal-title">Agregar</h3>
                     <button type="button" id="btn-close-modal"
-                        class="text-gray-400 hover:text-gray-600 dark:hover:text-white">
-                        <i class="fa-solid fa-xmark text-xl"></i>
+                        class="w-8 h-8 flex items-center justify-center bg-ios-sec rounded-full text-ios-textTitle">
+                        <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
 
-                <form id="product-form" class="space-y-5">
+                <form id="product-form" class="space-y-6">
                     <input type="hidden" id="prod-id">
 
                     <div>
-                        <label class="block mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">Código de
-                            Barras</label>
-                        <div class="flex gap-3">
-                            <input type="text" id="prod-barcode"
-                                class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-xl focus:ring-brand-500 focus:border-brand-500 block w-full p-4 dark:bg-gray-700/50 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white outline-none transition-shadow"
-                                placeholder="Escanear o tipear...">
-                            <button type="button" id="btn-scan"
-                                class="bg-gray-800 dark:bg-gray-600 text-white px-5 rounded-xl hover:bg-gray-700 transition flex items-center justify-center shadow-md shrink-0">
-                                <i class="fa-solid fa-barcode text-xl"></i>
-                            </button>
+                        <div class="flex justify-between items-end">
+                            <label class="text-xs font-semibold text-ios-textSub uppercase tracking-wider">Código de
+                                Barras</label>
+                            <button type="button" id="btn-scan" class="text-ios-black"><i
+                                    class="fa-solid fa-camera text-xl h-6"></i></button>
                         </div>
+                        <input type="text" id="prod-barcode" class="ios-input w-full" placeholder="Escanear o tipear..."
+                            autocomplete="off">
                     </div>
 
                     <div>
-                        <label class="block mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">Nombre del
-                            Producto <span class="text-red-500">*</span></label>
-                        <input type="text" id="prod-name" required
-                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-xl focus:ring-brand-500 focus:border-brand-500 block w-full p-4 dark:bg-gray-700/50 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white outline-none transition-shadow"
-                            placeholder="Ej: Leche Deslactosada">
+                        <label class="text-xs font-semibold text-ios-textSub uppercase tracking-wider">Nombre del
+                            Producto *</label>
+                        <input type="text" id="prod-name" required class="ios-input w-full"
+                            placeholder="Ej: Leche Deslactosada" autocomplete="off">
                     </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div class="grid grid-cols-2 gap-6">
                         <div>
-                            <label class="block mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">Categoría
-                                <span class="text-red-500">*</span></label>
-                            <select id="prod-category" required
-                                class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-xl focus:ring-brand-500 focus:border-brand-500 block w-full p-4 dark:bg-gray-700/50 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white outline-none">
+                            <label class="text-xs font-semibold text-ios-textSub uppercase tracking-wider">Categoría
+                                *</label>
+                            <select id="prod-category" required class="ios-input w-full appearance-none bg-transparent">
                                 <option value="Lácteos">Lácteos</option>
                                 <option value="Carnes">Carnes</option>
                                 <option value="Verduras">Verduras</option>
@@ -334,29 +361,26 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">Precio
-                                <span class="text-gray-400 font-normal">(Opcional)</span></label>
-                            <div class="relative">
-                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <span class="text-gray-500 sm:text-sm font-medium">$</span>
-                                </div>
-                                <input type="number" id="prod-price" step="0.01" min="0"
-                                    class="pl-8 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-xl focus:ring-brand-500 focus:border-brand-500 block w-full p-4 dark:bg-gray-700/50 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white outline-none"
-                                    placeholder="0.00">
+                            <label
+                                class="text-xs font-semibold text-ios-textSub uppercase tracking-wider">Precio</label>
+                            <div class="flex items-center">
+                                <span class="text-ios-textSub mr-1">$</span>
+                                <input type="number" id="prod-price" step="0.01" min="0" class="ios-input w-full py-0"
+                                    style="padding-top:12px; padding-bottom:12px;" placeholder="0.00">
                             </div>
                         </div>
                     </div>
 
                     <div>
-                        <label class="block mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">Fecha de
-                            Vencimiento <span class="text-red-500">*</span></label>
+                        <label class="text-xs font-semibold text-ios-textSub uppercase tracking-wider">Expiración
+                            *</label>
                         <input type="date" id="prod-date" required
-                            class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-xl focus:ring-brand-500 focus:border-brand-500 block w-full p-4 dark:bg-gray-700/50 dark:border-gray-600 dark:text-white outline-none">
+                            class="ios-input w-full bg-transparent appearance-none">
                     </div>
 
-                    <div class="pt-4 pb-2">
+                    <div class="pt-6">
                         <button type="submit"
-                            class="w-full text-white bg-brand-500 hover:bg-brand-600 font-bold rounded-xl text-lg px-5 py-4 transition-all shadow-lg shadow-brand-500/30 transform hover:-translate-y-0.5">Guardar
+                            class="w-full text-white bg-ios-black font-semibold rounded-full text-lg px-5 py-4 transition-all active:scale-95 shadow-lg">Guardar
                             Producto</button>
                     </div>
                 </form>
@@ -369,22 +393,20 @@
         class="fixed inset-0 z-[70] hidden bg-black flex-col opacity-0 transition-opacity duration-300">
         <div
             class="px-5 py-4 flex justify-between items-center bg-black/60 text-white z-10 w-full absolute top-0 backdrop-blur-md">
-            <h3 class="font-bold text-lg"><i class="fa-solid fa-expand mr-2"></i> Escanear Código</h3>
-            <button id="btn-close-scanner"
-                class="p-2 bg-white/10 rounded-full hover:bg-white/20 transition w-10 h-10 flex items-center justify-center">
-                <i class="fa-solid fa-xmark text-xl"></i>
-            </button>
+            <h3 class="font-semibold"><i class="fa-solid fa-barcode mr-2"></i> Capturar</h3>
+            <button id="btn-close-scanner" class="text-white text-xl">Esc</button>
         </div>
-        <div class="flex-1 w-full relative flex items-center justify-center overflow-hidden bg-gray-900"
+        <div class="flex-1 w-full relative flex items-center justify-center overflow-hidden bg-black"
             id="scanner-container">
-            <div id="reader" class="w-full max-w-lg mx-auto overflow-hidden rounded-2xl shadow-2xl"></div>
+            <div id="reader" class="w-full max-w-lg mx-auto overflow-hidden"></div>
         </div>
-        <div class="p-6 bg-black/80 backdrop-blur text-white text-center text-sm pb-safe z-10 w-full">
-            <p class="font-medium">Alinea el código de barras dentro del recuadro</p>
+        <div class="p-8 bg-black/80 backdrop-blur text-white text-center text-sm pb-safe z-10 w-full">
+            <p class="font-medium text-gray-300">Centra el código de barras en el marco</p>
         </div>
     </div>
 
     <!-- Scripts CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>

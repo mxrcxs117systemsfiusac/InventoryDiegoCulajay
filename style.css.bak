@@ -1,0 +1,166 @@
+/* Custom Styles complementing Tailwind CSS */
+
+/* For bottom padding in mobile (safe area block) */
+.pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom), 1.5rem);
+}
+
+.pb-safe-modal {
+    padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+}
+
+/* Hide scrollbar for clean look */
+::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    /* gray-300 */
+    border-radius: 10px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: #4b5563;
+    /* gray-600 */
+}
+
+/* Base settings */
+* {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Base animations */
+.animate-fade-in {
+    animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Nav styles */
+.nav-btn {
+    opacity: 0.5;
+    transform: scale(0.95);
+}
+
+.nav-btn.active {
+    opacity: 1;
+    color: #10b981;
+    /* brand-500 */
+    transform: scale(1);
+}
+
+.nav-btn.active i {
+    transform: translateY(-2px);
+}
+
+/* Status dots */
+.status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    box-shadow: 0 0 0 2px white;
+}
+
+.dark .status-dot {
+    box-shadow: 0 0 0 2px #1f2937;
+}
+
+/* Product Card hover effect */
+.product-card {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.product-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+/* Scanner laser animation */
+@keyframes scanning {
+    0% {
+        top: 0;
+        opacity: 0;
+    }
+
+    10% {
+        opacity: 1;
+    }
+
+    90% {
+        opacity: 1;
+    }
+
+    100% {
+        top: 100%;
+        opacity: 0;
+    }
+}
+
+.scanner-laser {
+    animation: scanning 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* SweetAlert customization */
+body .swal2-popup {
+    border-radius: 1.5rem !important;
+    padding: 2rem !important;
+}
+
+body.dark .swal2-popup {
+    background: #1f2937;
+    color: #f3f4f6;
+}
+
+body.dark .swal2-title,
+body.dark .swal2-html-container {
+    color: #f3f4f6;
+}
+
+body.dark .swal2-icon.swal2-warning {
+    border-color: #f59e0b;
+    color: #f59e0b;
+}
+
+/* Custom calendar icon color in dark mode */
+body.dark input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+}
+
+/* Html5-qrcode custom styles override */
+#reader {
+    width: 100%;
+    border-color: transparent !important;
+}
+
+#reader video {
+    object-fit: cover !important;
+    border-radius: 1rem;
+}
+
+/* Ocultar UI por defecto de la librería para usar la nuestra */
+#reader__dashboard_section_csr span,
+#reader__dashboard_section_csr button {
+    display: none !important;
+}
+
+#reader__dashboard_section_swaplink {
+    display: none !important;
+}

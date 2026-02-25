@@ -1,4 +1,4 @@
-const CACHE_NAME = 'inventory-app-v1.0';
+const CACHE_NAME = 'inventory-app-v2.0-ios';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -51,7 +51,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     // Solo cacheamos GET requests
     if (event.request.method !== 'GET') return;
-    
+
     event.respondWith(
         caches.match(event.request)
             .then(cachedResponse => {
@@ -59,7 +59,7 @@ self.addEventListener('fetch', (event) => {
                 if (cachedResponse) {
                     return cachedResponse;
                 }
-                
+
                 return fetch(event.request).catch(() => {
                     // Fallback para navegación offline si se intenta cargar una ruta de la SPA
                     if (event.request.mode === 'navigate' ||

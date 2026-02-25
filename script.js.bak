@@ -233,25 +233,25 @@ const UI = {
         const alerts = products.filter(p => p.statusObj === 'warning' || p.statusObj === 'danger');
 
         if (alerts.length === 0) {
-            container.innerHTML = `<div class="text-center text-ios-textSub py-6 text-sm">Tu inventario está en excelentes condiciones.</div>`;
+            container.innerHTML = `<div class="text-center text-gray-500 py-6 italic text-sm">Tu inventario está en excelentes condiciones.</div>`;
             return;
         }
 
-        let html = '<div class="divide-y divide-ios-border">';
+        let html = '<div class="divide-y divide-gray-100 dark:divide-gray-700">';
         // Tomar top 5 alertas
         alerts.slice(0, 5).forEach(p => {
-            const icon = p.statusObj === 'danger' ? 'fa-triangle-exclamation text-status-danger' : 'fa-clock text-status-warning';
-            const textClass = p.statusObj === 'danger' ? 'text-status-danger font-semibold' : 'text-status-warning font-medium';
+            const icon = p.statusObj === 'danger' ? 'fa-triangle-exclamation text-red-500' : 'fa-clock text-yellow-500';
+            const textClass = p.statusObj === 'danger' ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-yellow-700 dark:text-yellow-400 font-medium';
             const daysText = p.daysRemaining < 0 ? `Vencido hace ${Math.abs(p.daysRemaining)} días` : (p.daysRemaining === 0 ? 'Vence hoy' : `Vence en ${p.daysRemaining} días`);
 
             html += `
-            <div class="px-4 py-3 flex items-center gap-3 hover:bg-ios-sec transition">
+            <div class="px-4 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition">
                 <i class="fa-solid ${icon} text-lg w-6 text-center"></i>
                 <div class="flex-1 min-w-0">
-                    <p class="text-sm font-semibold text-ios-textTitle truncate">${p.name}</p>
+                    <p class="text-sm font-semibold text-gray-900 dark:text-white truncate">${p.name}</p>
                     <p class="text-xs ${textClass}">${daysText}</p>
                 </div>
-                <button onclick="window.UI.quickAction(${p.id}, 'consumed')" class="text-xs bg-ios-black text-white px-3 py-1.5 rounded-full hover:opacity-80 transition font-semibold">Consumir</button>
+                <button onclick="window.UI.quickAction(${p.id}, 'consumed')" class="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-1 rounded hover:bg-green-200 transition">Consumir</button>
             </div>`;
         });
         html += '</div>';
@@ -291,8 +291,8 @@ const UI = {
 
         if (filtered.length === 0) {
             container.innerHTML = `
-                <div class="py-12 text-center text-ios-textSub">
-                    <i class="fa-solid fa-box-open text-4xl mb-3 opacity-30"></i>
+                <div class="col-span-full text-center py-12 text-gray-500 dark:text-gray-400">
+                    <i class="fa-solid fa-box-open text-4xl mb-3 opacity-50"></i>
                     <p>No hay productos que mostrar.</p>
                 </div>`;
             return;
@@ -300,33 +300,39 @@ const UI = {
 
         let html = '';
         filtered.forEach(p => {
+            const statusColor = p.statusObj === 'safe' ? 'text-status-safe bg-green-50 dark:bg-green-900/20' :
+                p.statusObj === 'warning' ? 'text-status-warning bg-yellow-50 dark:bg-yellow-900/20' :
+                    'text-status-danger bg-red-50 dark:bg-red-900/20';
+            const borderStatus = p.statusObj === 'safe' ? 'border-transparent' :
+                p.statusObj === 'warning' ? 'border-yellow-200 dark:border-yellow-800' :
+                    'border-red-300 dark:border-red-800';
+
             const daysMsg = p.daysRemaining > 0 ? `Vence en ${p.daysRemaining} días` : (p.daysRemaining === 0 ? 'Vence hoy' : 'Vencido');
-            const dotColor = p.statusObj === 'danger' ? 'bg-status-danger' : p.statusObj === 'warning' ? 'bg-status-warning' : 'bg-status-safe';
-            const dateColor = p.statusObj === 'danger' ? 'text-status-danger' : 'text-ios-textSub';
 
             html += `
-            <div class="bg-white p-4 border-b border-ios-border flex items-center gap-4 transition hover:bg-ios-sec group">
-                <div class="w-12 h-12 rounded-[14px] flex items-center justify-center shrink-0 ${p.statusObj === 'danger' ? 'bg-red-50 text-status-danger' : p.statusObj === 'warning' ? 'bg-orange-50 text-status-warning' : 'bg-green-50 text-status-safe'}">
-                    <i class="fa-solid fa-box text-xl"></i>
+            <div class="product-card bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 ${borderStatus} relative overflow-hidden group">
+                <div class="absolute top-0 right-0 w-12 h-12 rounded-bl-full flex items-start justify-end p-2 ${p.statusObj === 'safe' ? 'bg-green-100' : 'bg-red-100'} dark:bg-opacity-20 transition"></div>
+                
+                <div class="flex justify-between items-start mb-3 relative z-10">
+                    <div>
+                        <span class="text-xs font-semibold px-2.5 py-1 rounded-lg ${statusColor} mb-2 inline-block">${p.category}</span>
+                        <h3 class="font-bold text-gray-900 dark:text-white text-lg leading-tight mb-1">${p.name}</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400"><i class="fa-solid fa-barcode mr-1 opacity-70"></i> ${p.barcode || 'Sin código'}</p>
+                    </div>
                 </div>
                 
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center justify-between mb-1">
-                        <h3 class="font-bold text-ios-textTitle text-base truncate pr-2">${p.name}</h3>
-                        <span class="text-[10px] font-semibold px-2 py-0.5 rounded border border-ios-border text-ios-textSub whitespace-nowrap">${p.category}</span>
-                    </div>
-                    <p class="text-xs font-medium ${dateColor} flex items-center">
-                        <span class="inline-block w-2 h-2 rounded-full mr-1.5 ${dotColor}"></span>
-                        ${daysMsg} <span class="text-gray-400 font-normal ml-1">· ${p.expiryDate}</span>
+                <div class="mb-4">
+                    <p class="text-sm font-medium ${p.statusObj === 'danger' ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}">
+                        <i class="fa-regular fa-calendar mr-1"></i> ${daysMsg} (${p.expiryDate})
                     </p>
                 </div>
 
-                <div class="flex flex-col sm:flex-row gap-2 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                    <button onclick="window.UI.processProduct(${p.id}, 'consumed')" class="w-8 h-8 rounded-full bg-ios-sec hover:bg-green-50 text-status-safe flex items-center justify-center transition" title="Consumí">
-                        <i class="fa-solid fa-check"></i>
+                <div class="flex flex-col sm:flex-row gap-2 border-t border-gray-100 dark:border-gray-700 pt-3 mt-auto">
+                    <button onclick="window.UI.processProduct(${p.id}, 'consumed')" class="flex-1 bg-green-100 hover:bg-green-200 text-green-700 dark:bg-green-900/30 dark:hover:bg-green-800/50 dark:text-green-400 rounded-xl py-3 sm:py-2 text-sm font-semibold transition flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-check"></i> Consumí
                     </button>
-                    <button onclick="window.UI.processProduct(${p.id}, 'wasted')" class="w-8 h-8 rounded-full bg-ios-sec hover:bg-red-50 text-status-danger flex items-center justify-center transition" title="Tiré">
-                        <i class="fa-solid fa-trash-can"></i>
+                    <button onclick="window.UI.processProduct(${p.id}, 'wasted')" class="flex-1 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/30 dark:hover:bg-red-800/50 dark:text-red-400 rounded-xl py-3 sm:py-2 text-sm font-semibold transition flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-trash-can"></i> Tiré
                     </button>
                 </div>
             </div>`;
@@ -339,34 +345,33 @@ const UI = {
         const container = document.getElementById('history-list');
         if (history.length === 0) {
             container.innerHTML = `
-                <div class="py-12 text-center text-ios-textSub">
-                    No hay registros en el historial.
-                </div>`;
+                <tr class="bg-white dark:bg-gray-800 border-b dark:border-gray-700">
+                    <td colspan="4" class="px-6 py-8 text-center text-gray-500">
+                        No hay registros en el historial.
+                    </td>
+                </tr>`;
             return;
         }
 
         let html = '';
         history.forEach(h => {
             const statusChip = h.finalStatus === 'consumed'
-                ? '<span class="text-status-safe text-xs font-semibold"><i class="fa-solid fa-check mr-1"></i>Consumido</span>'
-                : '<span class="text-status-danger text-xs font-semibold"><i class="fa-solid fa-xmark mr-1"></i>Desperdicio</span>';
+                ? '<span class="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-0.5 rounded dark:bg-green-900 dark:text-green-300">Consumido</span>'
+                : '<span class="bg-red-100 text-red-800 text-xs font-semibold px-2.5 py-0.5 rounded dark:bg-red-900 dark:text-red-300">Desperdicio</span>';
 
             const price = h.price ? `$${h.price.toFixed(2)}` : '-';
-            const lossColor = h.finalStatus === 'wasted' && h.price > 0 ? 'text-status-danger font-bold' : 'text-ios-textTitle';
+            const lossColor = h.finalStatus === 'wasted' && h.price > 0 ? 'text-red-600 font-bold' : '';
 
             html += `
-            <div class="px-6 py-4 flex items-center justify-between border-b border-ios-border hover:bg-ios-sec transition">
-                <div class="flex-1 min-w-0 pr-4">
-                    <p class="font-semibold text-ios-textTitle text-sm truncate">${h.name}</p>
-                    <div class="flex items-center gap-2 mt-0.5">
-                        ${statusChip}
-                        <span class="text-[10px] text-ios-textSub">${new Date(h.dateRemoved).toLocaleDateString()}</span>
-                    </div>
-                </div>
-                <div class="text-right shrink-0">
-                    <span class="text-sm ${lossColor}">${price}</span>
-                </div>
-            </div>`;
+            <tr class="bg-white dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition">
+                <td class="px-4 xl:px-6 py-4 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px] sm:max-w-none">
+                    ${h.name}
+                    <div class="text-xs text-gray-500 font-normal">${new Date(h.dateRemoved).toLocaleDateString()}</div>
+                </td>
+                <td class="px-4 xl:px-6 py-4 hidden sm:table-cell">${h.category}</td>
+                <td class="px-2 xl:px-6 py-4 text-center">${statusChip}</td>
+                <td class="px-4 xl:px-6 py-4 text-right ${lossColor}">${price}</td>
+            </tr>`;
         });
         container.innerHTML = html;
     },
@@ -380,8 +385,11 @@ const UI = {
         const catData = Object.values(categories);
 
         // Colors palette
-        const bgColors = ['#000000', '#34C759', '#FF9500', '#FF3B30', '#5856D6', '#AF52DE'];
-        const textColor = '#8E8E93';
+        const bgColors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'];
+
+        // Determine text color based on theme
+        const isDark = document.body.classList.contains('dark');
+        const textColor = isDark ? '#e5e7eb' : '#374151';
 
         chartCategory = new Chart(ctxCat, {
             type: 'doughnut',
@@ -389,7 +397,7 @@ const UI = {
                 labels: catLabels.length ? catLabels : ['Vacío'],
                 datasets: [{
                     data: catData.length ? catData : [1],
-                    backgroundColor: catData.length ? bgColors : ['#E5E5EA'],
+                    backgroundColor: catData.length ? bgColors : ['#e5e7eb'],
                     borderWidth: 0,
                     hoverOffset: 4
                 }]
@@ -398,7 +406,7 @@ const UI = {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'right', labels: { color: textColor, font: { family: 'Inter', weight: 500 } } }
+                    legend: { position: 'right', labels: { color: textColor, font: { family: 'Inter' } } }
                 },
                 cutout: '70%'
             }
@@ -446,7 +454,7 @@ const UI = {
                     legend: { display: false }
                 },
                 scales: {
-                    y: { beginAtZero: true, ticks: { stepSize: 1, color: textColor }, grid: { color: '#E5E5EA' } },
+                    y: { beginAtZero: true, ticks: { stepSize: 1, color: textColor }, grid: { color: isDark ? '#374151' : '#e5e7eb' } },
                     x: { ticks: { color: textColor }, grid: { display: false } }
                 }
             }
@@ -674,25 +682,19 @@ const DataSync = {
 // 7. INICIALIZACIÓN Y EVENT LISTENERS
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
+    // Theme setup
+    const themeBtn = document.getElementById('theme-toggle');
+    const isDark = localStorage.getItem('theme') === 'dark' ||
+        (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
-    const toggleMenu = (show) => {
-        const sideMenu = document.getElementById('side-menu');
-        const sideMenuPanel = document.getElementById('side-menu-panel');
-        if (show) {
-            sideMenu.classList.remove('hidden');
-            void sideMenu.offsetWidth;
-            sideMenu.classList.remove('opacity-0');
-            sideMenuPanel.classList.remove('-translate-x-full');
-        } else {
-            sideMenu.classList.remove('opacity-100');
-            sideMenu.classList.add('opacity-0');
-            sideMenuPanel.classList.add('-translate-x-full');
-            setTimeout(() => sideMenu.classList.add('hidden'), 300);
-        }
-    };
+    if (isDark) document.body.classList.add('dark');
 
-    document.getElementById('btn-menu-toggle')?.addEventListener('click', () => toggleMenu(true));
-    document.getElementById('side-menu-bg')?.addEventListener('click', () => toggleMenu(false));
+    themeBtn.addEventListener('click', () => {
+        document.body.classList.toggle('dark');
+        const darkEnabled = document.body.classList.contains('dark');
+        localStorage.setItem('theme', darkEnabled ? 'dark' : 'light');
+        UI.refreshAll(); // Para actualizar colores de los gráficos
+    });
 
     // DB Init
     try {
@@ -708,22 +710,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             const target = btn.getAttribute('data-target');
-            document.querySelectorAll('.nav-btn').forEach(b => {
-                b.classList.remove('active', 'text-ios-black');
-                b.classList.add('text-ios-textTitle');
-            });
-            btn.classList.add('active', 'text-ios-black');
             UI.navigate(target);
-            toggleMenu(false);
-
-            // Fix heading text
-            const titleMap = {
-                'view-dashboard': 'Inventario',
-                'view-inventory': 'Lista',
-                'view-history': 'Historial',
-                'view-about': 'Acerca de'
-            };
-            document.querySelector('header h1').innerText = titleMap[target] || 'Inventario';
         });
     });
 
