@@ -7,10 +7,11 @@
 // 1. CONFIGURATION Y ESTADOS
 // ==========================================
 const DB_NAME = 'InventoryDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORE_PRODUCTS = 'products';
 const STORE_HISTORY = 'history';
+const STORE_SHOPPING = 'shopping_list';
 
 // Estado global
 let chartCategory = null;
@@ -45,6 +46,11 @@ const db = {
                 // Store para historial
                 if (!database.objectStoreNames.contains(STORE_HISTORY)) {
                     database.createObjectStore(STORE_HISTORY, { keyPath: 'id', autoIncrement: true });
+                }
+
+                // Store para lista de compras
+                if (!database.objectStoreNames.contains(STORE_SHOPPING)) {
+                    database.createObjectStore(STORE_SHOPPING, { keyPath: 'id', autoIncrement: true });
                 }
             };
         });
@@ -182,6 +188,36 @@ const Logic = {
     async removePermanent(productId) {
         await db.delete(STORE_PRODUCTS, productId);
         await UI.refreshAll();
+    },
+
+    async getShoppingList() {
+        return await db.getAll(STORE_SHOPPING);
+    },
+
+    async addToShoppingList(name) {
+        const item = {
+            name: name,
+            checked: false,
+            dateAdded: new Date().toISOString()
+        };
+        await db.add(STORE_SHOPPING, item);
+    },
+
+    async toggleShoppingItem(id, checked) {
+        const item = await db.get(STORE_SHOPPING, id);
+        if (item) {
+            item.checked = checked;
+            await db.put(STORE_SHOPPING, item);
+        }
+    },
+
+    async clearCheckedShopping() {
+        const items = await this.getShoppingList();
+        for (const item of items) {
+            if (item.checked) {
+                await db.delete(STORE_SHOPPING, item.id);
+            }
+        }
     }
 };
 
@@ -193,10 +229,12 @@ const UI = {
     async refreshAll() {
         const products = await Logic.loadActiveInventory();
         const history = await Logic.loadHistory();
+        const shopping = await Logic.getShoppingList();
 
         this.renderDashboard(products, history);
         this.renderInventory(products);
         this.renderHistory(history);
+        this.renderShoppingList(shopping);
         this.checkAlerts(products);
     },
 
@@ -222,7 +260,7 @@ const UI = {
         const loss = history
             .filter(h => h.finalStatus === 'wasted')
             .reduce((sum, h) => sum + (h.price || 0), 0);
-        document.getElementById('stat-loss').innerText = `$${loss.toFixed(2)}`;
+        document.getElementById('stat-loss').innerText = `Q${loss.toFixed(2)}`;
 
         this.updateCharts(categories, history);
     },
@@ -351,7 +389,7 @@ const UI = {
                 ? '<span class="text-status-safe text-xs font-semibold"><i class="fa-solid fa-check mr-1"></i>Consumido</span>'
                 : '<span class="text-status-danger text-xs font-semibold"><i class="fa-solid fa-xmark mr-1"></i>Desperdicio</span>';
 
-            const price = h.price ? `$${h.price.toFixed(2)}` : '-';
+            const price = h.price ? `Q${h.price.toFixed(2)}` : '-';
             const lossColor = h.finalStatus === 'wasted' && h.price > 0 ? 'text-status-danger font-bold' : 'text-ios-textTitle';
 
             html += `
@@ -369,6 +407,48 @@ const UI = {
             </div>`;
         });
         container.innerHTML = html;
+    },
+
+    renderShoppingList(items) {
+        const container = document.getElementById('shopping-list');
+        const actions = document.getElementById('shopping-actions');
+
+        if (items.length === 0) {
+            container.innerHTML = `
+                <div class="py-12 text-center text-ios-textSub">
+                    <i class="fa-solid fa-basket-shopping text-4xl mb-3 opacity-30"></i>
+                    <p>Tu lista de compras está vacía.</p>
+                </div>`;
+            if (actions) actions.classList.add('hidden');
+            return;
+        }
+
+        let hasChecked = false;
+        let html = '';
+        items.forEach(item => {
+            if (item.checked) hasChecked = true;
+            const textClass = item.checked ? 'line-through text-ios-textSub' : 'text-ios-textTitle font-semibold';
+            html += `
+            <div class="px-6 py-4 flex items-center justify-between border-b border-ios-border hover:bg-ios-sec transition">
+                <div class="flex items-center gap-3 flex-1">
+                    <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="window.UI.toggleShopping(${item.id}, this.checked)" class="w-5 h-5 text-ios-black border-gray-300 rounded focus:ring-ios-black cursor-pointer">
+                    <p class="text-sm ${textClass} truncate">${item.name}</p>
+                </div>
+            </div>`;
+        });
+
+        container.innerHTML = html;
+        if (hasChecked && actions) {
+            actions.classList.remove('hidden');
+        } else if (actions) {
+            actions.classList.add('hidden');
+        }
+    },
+
+    async toggleShopping(id, checked) {
+        await Logic.toggleShoppingItem(id, checked);
+        const items = await Logic.getShoppingList();
+        this.renderShoppingList(items);
     },
 
     updateCharts(categories, history) {
@@ -462,29 +542,86 @@ const UI = {
 
         const result = await Swal.fire({
             title: title,
-            text: text,
+            html: `
+                <p class="text-sm text-ios-textSub mb-4">${text}</p>
+                <div class="flex items-center justify-center mt-2">
+                    <input type="checkbox" id="add-to-shopping" checked class="w-5 h-5 text-ios-black border-gray-300 rounded focus:ring-ios-black cursor-pointer">
+                    <label for="add-to-shopping" class="ml-2 text-sm font-medium text-ios-textTitle cursor-pointer">¿Agregar a la lista de compras?</label>
+                </div>
+            `,
             icon: icon,
             showCancelButton: true,
             confirmButtonColor: confirmColor,
             cancelButtonColor: '#6b7280',
             confirmButtonText: 'Sí, confirmar',
-            cancelButtonText: 'Cancelar'
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const addToList = document.getElementById('add-to-shopping').checked;
+                return { addToList };
+            }
         });
 
         if (result.isConfirmed) {
+            const product = await db.get(STORE_PRODUCTS, id);
             await Logic.moveToHistory(id, finalStatus);
+
+            if (result.value.addToList && product) {
+                await Logic.addToShoppingList(product.name);
+            }
+
             Swal.fire({
                 title: 'Actualizado!',
-                text: 'El historial ha sido actualizado.',
+                text: 'El inventario ha sido actualizado.',
                 icon: 'success',
                 timer: 1500,
                 showConfirmButton: false
             });
+            await UI.refreshAll();
         }
     },
 
     quickAction(id, action) {
         this.processProduct(id, action);
+    },
+
+    async generateRecipePrompt() {
+        const products = await Logic.loadActiveInventory();
+        const alerts = products.filter(p => p.statusObj === 'danger' || p.statusObj === 'warning').map(p => p.name);
+        const safe = products.filter(p => p.statusObj === 'safe').map(p => p.name);
+
+        if (products.length === 0) {
+            Swal.fire('Inventario Vacío', 'Agrega productos primero para obtener sugerencias.', 'info');
+            return;
+        }
+
+        let pt = "Tengo estos ingredientes en mi inventario:\\n\\n";
+        if (alerts.length > 0) pt += "Por vencer / Urgentes:\\n- " + alerts.join("\\n- ") + "\\n\\n";
+        pt += "Otros ingredientes:\\n- " + (safe.length > 0 ? safe.join("\\n- ") : "Ninguno") + "\\n\\n";
+        pt += "¿Qué receta puedo cocinar hoy para aprovechar especialmente los urgentes?";
+
+        Swal.fire({
+            title: 'Sugerencia de Chef',
+            html: `
+                <div class="text-left bg-ios-sec p-4 rounded-xl text-sm text-ios-textTitle mb-4 max-h-48 overflow-y-auto whitespace-pre-wrap">${pt}</div>
+                <p class="text-xs text-ios-textSub">Copia este texto y pégalo en ChatGPT para obtener ideas increíbles.</p>
+            `,
+            icon: 'info',
+            showCancelButton: true,
+            confirmButtonText: '<i class="fa-solid fa-copy"></i> Copiar',
+            cancelButtonText: '<i class="fa-solid fa-up-right-from-square"></i> Abrir ChatGPT',
+            cancelButtonColor: '#10b981',
+            confirmButtonColor: '#000000',
+        }).then((result) => {
+            if (result.isConfirmed) {
+                navigator.clipboard.writeText(pt).then(() => {
+                    Swal.fire({ title: '¡Copiado!', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+                });
+            } else if (result.dismiss === Swal.DismissReason.cancel) {
+                navigator.clipboard.writeText(pt).then(() => {
+                    window.open('https://chatgpt.com/', '_blank');
+                });
+            }
+        });
     },
 
     // --- Modal Navigation ---
@@ -550,24 +687,8 @@ const Scanner = {
                 this.stop();
                 document.getElementById('prod-barcode').value = decodedText;
 
-                // Simulación de búsqueda en DB local/API externa
-                const mockProducts = {
-                    '740100511': { name: 'Refresco Cola', cat: 'Bebidas' },
-                    '123456789': { name: 'Pan de Molde Blanco', cat: 'Otros' }
-                };
-                if (mockProducts[decodedText]) {
-                    document.getElementById('prod-name').value = mockProducts[decodedText].name;
-                    document.getElementById('prod-category').value = mockProducts[decodedText].cat;
-                    Swal.fire({
-                        title: 'Producto Encontrado',
-                        text: mockProducts[decodedText].name,
-                        icon: 'success',
-                        timer: 1500,
-                        showConfirmButton: false,
-                        toast: true,
-                        position: 'top-end'
-                    });
-                }
+                // Fetch de OpenFoodFacts
+                if (window.API) window.API.fetchProduct(decodedText);
             },
             (errorMessage) => {
                 // Ignore errors (scanning empty frames)
@@ -721,6 +842,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 'view-dashboard': 'Inventario',
                 'view-inventory': 'Lista',
                 'view-history': 'Historial',
+                'view-shopping': 'Compras',
                 'view-about': 'Acerca de'
             };
             document.querySelector('header h1').innerText = titleMap[target] || 'Inventario';
@@ -795,21 +917,80 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // Excel
-    document.getElementById('btn-export-excel').addEventListener('click', () => {
+    document.getElementById('btn-export-excel')?.addEventListener('click', () => {
         DataSync.exportToExcel();
     });
 
-    const fileInput = document.getElementById('excel-file-input');
-    document.getElementById('btn-import-excel').addEventListener('click', () => {
-        fileInput.click();
+    // Autocompletado manual de codigo de barras
+    document.getElementById('prod-barcode')?.addEventListener('blur', (e) => {
+        if (window.API) window.API.fetchProduct(e.target.value.trim());
     });
-    fileInput.addEventListener('change', (e) => {
+
+    // Boton borrar comprados
+    document.getElementById('btn-clear-shopping')?.addEventListener('click', async () => {
+        await Logic.clearCheckedShopping();
+        UI.refreshAll();
+    });
+
+    // Boton Gourmet
+    document.getElementById('btn-gourmet')?.addEventListener('click', () => {
+        UI.generateRecipePrompt();
+    });
+
+    const fileInput = document.getElementById('excel-file-input');
+    document.getElementById('btn-import-excel')?.addEventListener('click', () => {
+        if (fileInput) fileInput.click();
+    });
+    fileInput?.addEventListener('change', (e) => {
         if (e.target.files.length > 0) {
             DataSync.importFromExcel(e.target.files[0]);
         }
         e.target.value = ''; // Reset
     });
 });
+
+// ==========================================
+// 8. OPENFOODFACTS API
+// ==========================================
+window.API = {
+    async fetchProduct(barcode) {
+        if (!barcode) return;
+        try {
+            const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+            const data = await res.json();
+            if (data.status === 1) {
+                const p = data.product;
+                document.getElementById('prod-name').value = p.product_name_es || p.product_name || '';
+
+                const brandInput = document.getElementById('prod-brand');
+                if (brandInput && p.brands) brandInput.value = p.brands.split(',')[0];
+
+                // Intentar mapear categoria
+                let cat = 'Otros';
+                const hierarchy = p.categories_hierarchy || [];
+                const catStr = hierarchy.join(' ').toLowerCase();
+                if (catStr.includes('milk') || catStr.includes('cheese') || catStr.includes('dairy') || catStr.includes('lácteos') || catStr.includes('quesos')) cat = 'Lácteos';
+                else if (catStr.includes('meat') || catStr.includes('carnes')) cat = 'Carnes';
+                else if (catStr.includes('plant-based') || catStr.includes('vegetable') || catStr.includes('verduras') || catStr.includes('vegetales')) cat = 'Verduras';
+                else if (catStr.includes('beverage') || catStr.includes('bebidas') || catStr.includes('drinks')) cat = 'Bebidas';
+
+                document.getElementById('prod-category').value = cat;
+
+                Swal.fire({
+                    title: 'Producto Encontrado',
+                    text: p.product_name_es || p.product_name,
+                    icon: 'success',
+                    timer: 1500,
+                    showConfirmButton: false,
+                    toast: true,
+                    position: 'top-end'
+                });
+            }
+        } catch (e) {
+            console.warn("OpenFoodFacts offline o error:", e);
+        }
+    }
+};
 
 // Registrar Service Worker para PWA
 if ('serviceWorker' in navigator) {
