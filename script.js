@@ -1,6 +1,6 @@
 /**
- * Gestión de Inventario Doméstico - Lógica Principal
- * PWA + Vanilla JS + IndexedDB
+ * Gestión de Inventario Doméstico — v3.0 Profesional
+ * PWA + Vanilla JS + IndexedDB + OpenFoodFacts
  */
 
 // ==========================================
@@ -17,9 +17,67 @@ const STORE_SHOPPING = 'shopping_list';
 let chartCategory = null;
 let chartExpired = null;
 let html5QrCode = null;
+let currentView = 'view-dashboard';
+let _barcodeDebounce = null;
 
 // ==========================================
-// 2. BASE DE DATOS LOCAL (IndexedDB)
+// 2. UTILIDADES
+// ==========================================
+const Utils = {
+    // Animated counter for stat numbers
+    animateCounter(element, target, duration = 600) {
+        const start = parseInt(element.innerText) || 0;
+        if (start === target) return;
+
+        const startTime = performance.now();
+        const diff = target - start;
+
+        const step = (currentTime) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            // easeOutExpo
+            const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+            const current = Math.round(start + diff * eased);
+            element.innerText = current;
+
+            if (progress < 1) {
+                requestAnimationFrame(step);
+            } else {
+                element.classList.add('animate-stat-pop');
+                setTimeout(() => element.classList.remove('animate-stat-pop'), 600);
+            }
+        };
+
+        requestAnimationFrame(step);
+    },
+
+    // Debounce helper
+    debounce(fn, ms) {
+        let timer;
+        return (...args) => {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn(...args), ms);
+        };
+    },
+
+    // Haptic feedback (if supported)
+    haptic(style = 'light') {
+        if (navigator.vibrate) {
+            const patterns = { light: 10, medium: 25, heavy: 50, success: [10, 50, 10] };
+            navigator.vibrate(patterns[style] || 10);
+        }
+    },
+
+    // Escape HTML
+    escapeHtml(str) {
+        const div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+};
+
+// ==========================================
+// 3. BASE DE DATOS LOCAL (IndexedDB)
 // ==========================================
 const db = {
     instance: null,
@@ -38,17 +96,12 @@ const db = {
             request.onupgradeneeded = (e) => {
                 const database = e.target.result;
 
-                // Store para productos (activos)
                 if (!database.objectStoreNames.contains(STORE_PRODUCTS)) {
                     database.createObjectStore(STORE_PRODUCTS, { keyPath: 'id', autoIncrement: true });
                 }
-
-                // Store para historial
                 if (!database.objectStoreNames.contains(STORE_HISTORY)) {
                     database.createObjectStore(STORE_HISTORY, { keyPath: 'id', autoIncrement: true });
                 }
-
-                // Store para lista de compras
                 if (!database.objectStoreNames.contains(STORE_SHOPPING)) {
                     database.createObjectStore(STORE_SHOPPING, { keyPath: 'id', autoIncrement: true });
                 }
@@ -119,7 +172,7 @@ const db = {
 };
 
 // ==========================================
-// 3. LÓGICA DE NEGOCIO
+// 4. LÓGICA DE NEGOCIO
 // ==========================================
 const Logic = {
     calculateDaysRemaining(expiryDateStr) {
@@ -149,7 +202,6 @@ const Logic = {
     async loadActiveInventory() {
         let products = await db.getAll(STORE_PRODUCTS);
         const updated = products.map(p => this.refreshProductStatus(p));
-        // Ordenar por fecha de vencimiento (más próximo primero)
         updated.sort((a, b) => a.daysRemaining - b.daysRemaining);
         return updated;
     },
@@ -176,7 +228,7 @@ const Logic = {
 
         const historyItem = {
             ...product,
-            finalStatus: finalStatus, // 'consumed' | 'wasted'
+            finalStatus: finalStatus,
             dateRemoved: new Date().toISOString()
         };
 
@@ -222,7 +274,7 @@ const Logic = {
 };
 
 // ==========================================
-// 4. INTERFAZ DE USUARIO (UI)
+// 5. INTERFAZ DE USUARIO (UI)
 // ==========================================
 const UI = {
     // --- Renderers ---
@@ -239,7 +291,6 @@ const UI = {
     },
 
     renderDashboard(products, history) {
-        // Stats
         let safe = 0, warning = 0, danger = 0;
         let categories = {};
 
@@ -251,10 +302,11 @@ const UI = {
             categories[p.category] = (categories[p.category] || 0) + 1;
         });
 
-        document.getElementById('stat-total').innerText = products.length;
-        document.getElementById('stat-safe').innerText = safe;
-        document.getElementById('stat-warning').innerText = warning;
-        document.getElementById('stat-danger').innerText = danger;
+        // Animated counters
+        Utils.animateCounter(document.getElementById('stat-total'), products.length);
+        Utils.animateCounter(document.getElementById('stat-safe'), safe);
+        Utils.animateCounter(document.getElementById('stat-warning'), warning);
+        Utils.animateCounter(document.getElementById('stat-danger'), danger);
 
         // Pérdida Económica
         const loss = history
@@ -267,36 +319,47 @@ const UI = {
 
     checkAlerts(products) {
         const container = document.getElementById('alerts-container');
-        const countSafe = products.filter(p => p.statusObj === 'safe').length;
         const alerts = products.filter(p => p.statusObj === 'warning' || p.statusObj === 'danger');
 
         if (alerts.length === 0) {
-            container.innerHTML = `<div class="text-center text-ios-textSub py-6 text-sm">Tu inventario está en excelentes condiciones.</div>`;
+            container.innerHTML = `
+                <div class="text-center py-8 px-4">
+                    <div class="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                        <i class="fa-solid fa-shield-check text-2xl text-status-safe"></i>
+                    </div>
+                    <p class="text-sm font-semibold text-ios-textTitle">Todo en orden</p>
+                    <p class="text-xs text-ios-textSub mt-1">Tu inventario está en excelentes condiciones.</p>
+                </div>`;
             return;
         }
 
-        let html = '<div class="divide-y divide-ios-border">';
-        // Tomar top 5 alertas
-        alerts.slice(0, 5).forEach(p => {
+        let html = '<div class="divide-y divide-ios-border/50">';
+        alerts.slice(0, 5).forEach((p, i) => {
             const icon = p.statusObj === 'danger' ? 'fa-triangle-exclamation text-status-danger' : 'fa-clock text-status-warning';
-            const textClass = p.statusObj === 'danger' ? 'text-status-danger font-semibold' : 'text-status-warning font-medium';
-            const daysText = p.daysRemaining < 0 ? `Vencido hace ${Math.abs(p.daysRemaining)} días` : (p.daysRemaining === 0 ? 'Vence hoy' : `Vence en ${p.daysRemaining} días`);
+            const bgIcon = p.statusObj === 'danger' ? 'bg-red-50' : 'bg-orange-50';
+            const textClass = p.statusObj === 'danger' ? 'text-status-danger font-bold' : 'text-status-warning font-semibold';
+            const daysText = p.daysRemaining < 0
+                ? `Vencido hace ${Math.abs(p.daysRemaining)} días`
+                : (p.daysRemaining === 0 ? 'Vence hoy' : `Vence en ${p.daysRemaining} días`);
+            const escapedName = Utils.escapeHtml(p.name);
 
             html += `
-            <div class="px-4 py-3 flex items-center gap-3 hover:bg-ios-sec transition">
-                <i class="fa-solid ${icon} text-lg w-6 text-center"></i>
+            <div class="px-4 py-3.5 flex items-center gap-3 hover:bg-white/50 transition animate-card-in" style="animation-delay: ${i * 60}ms">
+                <div class="w-10 h-10 ${bgIcon} rounded-xl flex items-center justify-center shrink-0">
+                    <i class="fa-solid ${icon} text-base"></i>
+                </div>
                 <div class="flex-1 min-w-0">
-                    <p class="text-sm font-semibold text-ios-textTitle truncate">${p.name}</p>
+                    <p class="text-sm font-bold text-ios-textTitle truncate">${escapedName}</p>
                     <p class="text-xs ${textClass}">${daysText}</p>
                 </div>
-                <button onclick="window.UI.quickAction(${p.id}, 'consumed')" class="text-xs bg-ios-black text-white px-3 py-1.5 rounded-full hover:opacity-80 transition font-semibold">Consumir</button>
+                <button onclick="window.UI.quickAction(${p.id}, 'consumed')" class="text-[11px] bg-ios-black text-white px-3 py-1.5 rounded-full hover:opacity-80 active:scale-95 transition-all font-bold">Consumir</button>
             </div>`;
         });
         html += '</div>';
 
         container.innerHTML = html;
 
-        // Notificaciones PWA (si está permitido)
+        // Notificaciones PWA
         this.showNativeNotification(alerts);
     },
 
@@ -329,42 +392,56 @@ const UI = {
 
         if (filtered.length === 0) {
             container.innerHTML = `
-                <div class="py-12 text-center text-ios-textSub">
-                    <i class="fa-solid fa-box-open text-4xl mb-3 opacity-30"></i>
-                    <p>No hay productos que mostrar.</p>
+                <div class="py-16 text-center">
+                    <div class="empty-state-icon inline-block mb-4">
+                        <div class="w-16 h-16 bg-ios-sec rounded-2xl flex items-center justify-center mx-auto">
+                            <i class="fa-solid fa-box-open text-3xl text-ios-border"></i>
+                        </div>
+                    </div>
+                    <p class="text-sm font-semibold text-ios-textSub">No hay productos que mostrar</p>
+                    <p class="text-xs text-ios-textSub/70 mt-1">Agrega productos con el botón +</p>
                 </div>`;
             return;
         }
 
         let html = '';
-        filtered.forEach(p => {
-            const daysMsg = p.daysRemaining > 0 ? `Vence en ${p.daysRemaining} días` : (p.daysRemaining === 0 ? 'Vence hoy' : 'Vencido');
+        filtered.forEach((p, i) => {
+            const daysMsg = p.daysRemaining > 0
+                ? `Vence en ${p.daysRemaining} día${p.daysRemaining > 1 ? 's' : ''}`
+                : (p.daysRemaining === 0 ? 'Vence hoy' : `Vencido hace ${Math.abs(p.daysRemaining)} día${Math.abs(p.daysRemaining) > 1 ? 's' : ''}`);
             const dotColor = p.statusObj === 'danger' ? 'bg-status-danger' : p.statusObj === 'warning' ? 'bg-status-warning' : 'bg-status-safe';
             const dateColor = p.statusObj === 'danger' ? 'text-status-danger' : 'text-ios-textSub';
+            const iconBg = p.statusObj === 'danger' ? 'bg-red-50 text-status-danger' : p.statusObj === 'warning' ? 'bg-orange-50 text-status-warning' : 'bg-green-50 text-status-safe';
+            const escapedName = Utils.escapeHtml(p.name);
+            const escapedCat = Utils.escapeHtml(p.category);
+            const priceStr = p.price > 0 ? `Q${p.price.toFixed(2)}` : '';
 
             html += `
-            <div class="bg-white p-4 border-b border-ios-border flex items-center gap-4 transition hover:bg-ios-sec group">
-                <div class="w-12 h-12 rounded-[14px] flex items-center justify-center shrink-0 ${p.statusObj === 'danger' ? 'bg-red-50 text-status-danger' : p.statusObj === 'warning' ? 'bg-orange-50 text-status-warning' : 'bg-green-50 text-status-safe'}">
-                    <i class="fa-solid fa-box text-xl"></i>
+            <div class="inventory-item bg-white p-4 rounded-2xl border border-ios-border/30 flex items-center gap-4 group animate-card-in shadow-sm hover:shadow-md" style="animation-delay: ${Math.min(i * 40, 400)}ms">
+                <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${iconBg}">
+                    <i class="fa-solid fa-box text-lg"></i>
                 </div>
                 
                 <div class="flex-1 min-w-0">
-                    <div class="flex items-center justify-between mb-1">
-                        <h3 class="font-bold text-ios-textTitle text-base truncate pr-2">${p.name}</h3>
-                        <span class="text-[10px] font-semibold px-2 py-0.5 rounded border border-ios-border text-ios-textSub whitespace-nowrap">${p.category}</span>
+                    <div class="flex items-center justify-between mb-0.5">
+                        <h3 class="font-bold text-ios-textTitle text-[15px] truncate pr-2">${escapedName}</h3>
+                        <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-ios-sec text-ios-textSub whitespace-nowrap uppercase tracking-wider">${escapedCat}</span>
                     </div>
-                    <p class="text-xs font-medium ${dateColor} flex items-center">
-                        <span class="inline-block w-2 h-2 rounded-full mr-1.5 ${dotColor}"></span>
-                        ${daysMsg} <span class="text-gray-400 font-normal ml-1">· ${p.expiryDate}</span>
-                    </p>
+                    <div class="flex items-center justify-between">
+                        <p class="text-xs font-medium ${dateColor} flex items-center">
+                            <span class="inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${dotColor}"></span>
+                            ${daysMsg}
+                        </p>
+                        ${priceStr ? `<span class="text-[11px] font-semibold text-ios-textSub">${priceStr}</span>` : ''}
+                    </div>
                 </div>
 
-                <div class="flex flex-col sm:flex-row gap-2 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                    <button onclick="window.UI.processProduct(${p.id}, 'consumed')" class="w-8 h-8 rounded-full bg-ios-sec hover:bg-green-50 text-status-safe flex items-center justify-center transition" title="Consumí">
-                        <i class="fa-solid fa-check"></i>
+                <div class="flex flex-col gap-1.5 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                    <button onclick="window.UI.processProduct(${p.id}, 'consumed')" class="w-8 h-8 rounded-full bg-green-50 hover:bg-green-100 text-status-safe flex items-center justify-center transition active:scale-90" title="Consumí">
+                        <i class="fa-solid fa-check text-sm"></i>
                     </button>
-                    <button onclick="window.UI.processProduct(${p.id}, 'wasted')" class="w-8 h-8 rounded-full bg-ios-sec hover:bg-red-50 text-status-danger flex items-center justify-center transition" title="Tiré">
-                        <i class="fa-solid fa-trash-can"></i>
+                    <button onclick="window.UI.processProduct(${p.id}, 'wasted')" class="w-8 h-8 rounded-full bg-red-50 hover:bg-red-100 text-status-danger flex items-center justify-center transition active:scale-90" title="Tiré">
+                        <i class="fa-solid fa-trash-can text-sm"></i>
                     </button>
                 </div>
             </div>`;
@@ -377,28 +454,34 @@ const UI = {
         const container = document.getElementById('history-list');
         if (history.length === 0) {
             container.innerHTML = `
-                <div class="py-12 text-center text-ios-textSub">
-                    No hay registros en el historial.
+                <div class="py-16 text-center">
+                    <div class="empty-state-icon inline-block mb-4">
+                        <div class="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto">
+                            <i class="fa-solid fa-clock-rotate-left text-3xl text-ios-border"></i>
+                        </div>
+                    </div>
+                    <p class="text-sm font-semibold text-ios-textSub">No hay registros en el historial</p>
                 </div>`;
             return;
         }
 
-        let html = '';
-        history.forEach(h => {
+        let html = '<div class="divide-y divide-ios-border/30">';
+        history.forEach((h, i) => {
             const statusChip = h.finalStatus === 'consumed'
-                ? '<span class="text-status-safe text-xs font-semibold"><i class="fa-solid fa-check mr-1"></i>Consumido</span>'
-                : '<span class="text-status-danger text-xs font-semibold"><i class="fa-solid fa-xmark mr-1"></i>Desperdicio</span>';
+                ? '<span class="inline-flex items-center gap-1 text-status-safe text-[11px] font-bold bg-green-50 px-2 py-0.5 rounded-full"><i class="fa-solid fa-check"></i>Consumido</span>'
+                : '<span class="inline-flex items-center gap-1 text-status-danger text-[11px] font-bold bg-red-50 px-2 py-0.5 rounded-full"><i class="fa-solid fa-xmark"></i>Desperdicio</span>';
 
             const price = h.price ? `Q${h.price.toFixed(2)}` : '-';
-            const lossColor = h.finalStatus === 'wasted' && h.price > 0 ? 'text-status-danger font-bold' : 'text-ios-textTitle';
+            const lossColor = h.finalStatus === 'wasted' && h.price > 0 ? 'text-status-danger font-black' : 'text-ios-textTitle font-semibold';
+            const escapedName = Utils.escapeHtml(h.name);
 
             html += `
-            <div class="px-6 py-4 flex items-center justify-between border-b border-ios-border hover:bg-ios-sec transition">
+            <div class="px-5 py-4 flex items-center justify-between hover:bg-white/50 transition animate-card-in" style="animation-delay: ${Math.min(i * 30, 300)}ms">
                 <div class="flex-1 min-w-0 pr-4">
-                    <p class="font-semibold text-ios-textTitle text-sm truncate">${h.name}</p>
-                    <div class="flex items-center gap-2 mt-0.5">
+                    <p class="font-bold text-ios-textTitle text-sm truncate">${escapedName}</p>
+                    <div class="flex items-center gap-2 mt-1">
                         ${statusChip}
-                        <span class="text-[10px] text-ios-textSub">${new Date(h.dateRemoved).toLocaleDateString()}</span>
+                        <span class="text-[10px] text-ios-textSub font-medium">${new Date(h.dateRemoved).toLocaleDateString()}</span>
                     </div>
                 </div>
                 <div class="text-right shrink-0">
@@ -406,6 +489,7 @@ const UI = {
                 </div>
             </div>`;
         });
+        html += '</div>';
         container.innerHTML = html;
     },
 
@@ -415,27 +499,34 @@ const UI = {
 
         if (items.length === 0) {
             container.innerHTML = `
-                <div class="py-12 text-center text-ios-textSub">
-                    <i class="fa-solid fa-basket-shopping text-4xl mb-3 opacity-30"></i>
-                    <p>Tu lista de compras está vacía.</p>
+                <div class="py-16 text-center">
+                    <div class="empty-state-icon inline-block mb-4">
+                        <div class="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto">
+                            <i class="fa-solid fa-basket-shopping text-3xl text-ios-border"></i>
+                        </div>
+                    </div>
+                    <p class="text-sm font-semibold text-ios-textSub">Tu lista de compras está vacía</p>
+                    <p class="text-xs text-ios-textSub/70 mt-1">Los productos se agregan automáticamente</p>
                 </div>`;
             if (actions) actions.classList.add('hidden');
             return;
         }
 
         let hasChecked = false;
-        let html = '';
+        let html = '<div class="divide-y divide-ios-border/30">';
         items.forEach(item => {
             if (item.checked) hasChecked = true;
-            const textClass = item.checked ? 'line-through text-ios-textSub' : 'text-ios-textTitle font-semibold';
+            const textClass = item.checked ? 'line-through text-ios-textSub' : 'text-ios-textTitle font-bold';
+            const escapedName = Utils.escapeHtml(item.name);
             html += `
-            <div class="px-6 py-4 flex items-center justify-between border-b border-ios-border hover:bg-ios-sec transition">
+            <div class="px-5 py-4 flex items-center justify-between hover:bg-white/50 transition">
                 <div class="flex items-center gap-3 flex-1">
-                    <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="window.UI.toggleShopping(${item.id}, this.checked)" class="w-5 h-5 text-ios-black border-gray-300 rounded focus:ring-ios-black cursor-pointer">
-                    <p class="text-sm ${textClass} truncate">${item.name}</p>
+                    <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="window.UI.toggleShopping(${item.id}, this.checked)" class="w-5 h-5 text-ios-black border-gray-300 rounded-lg focus:ring-ios-black cursor-pointer accent-black">
+                    <p class="text-sm ${textClass} truncate">${escapedName}</p>
                 </div>
             </div>`;
         });
+        html += '</div>';
 
         container.innerHTML = html;
         if (hasChecked && actions) {
@@ -446,21 +537,20 @@ const UI = {
     },
 
     async toggleShopping(id, checked) {
+        Utils.haptic('light');
         await Logic.toggleShoppingItem(id, checked);
         const items = await Logic.getShoppingList();
         this.renderShoppingList(items);
     },
 
     updateCharts(categories, history) {
-        // Grafico 1: Categorias (Pie)
         const ctxCat = document.getElementById('categoryChart');
         if (chartCategory) chartCategory.destroy();
 
         const catLabels = Object.keys(categories);
         const catData = Object.values(categories);
 
-        // Colors palette
-        const bgColors = ['#000000', '#34C759', '#FF9500', '#FF3B30', '#5856D6', '#AF52DE'];
+        const bgColors = ['#111111', '#34C759', '#FF9500', '#FF3B30', '#5856D6', '#AF52DE', '#007AFF', '#FF2D55'];
         const textColor = '#8E8E93';
 
         chartCategory = new Chart(ctxCat, {
@@ -471,16 +561,31 @@ const UI = {
                     data: catData.length ? catData : [1],
                     backgroundColor: catData.length ? bgColors : ['#E5E5EA'],
                     borderWidth: 0,
-                    hoverOffset: 4
+                    hoverOffset: 6,
+                    borderRadius: 4
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'right', labels: { color: textColor, font: { family: 'Inter', weight: 500 } } }
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            color: textColor,
+                            font: { family: 'Inter', weight: '600', size: 11 },
+                            padding: 16,
+                            usePointStyle: true,
+                            pointStyle: 'rectRounded'
+                        }
+                    }
                 },
-                cutout: '70%'
+                cutout: '72%',
+                animation: {
+                    animateRotate: true,
+                    duration: 800,
+                    easing: 'easeOutQuart'
+                }
             }
         });
 
@@ -488,11 +593,9 @@ const UI = {
         const ctxExp = document.getElementById('expiredChart');
         if (chartExpired) chartExpired.destroy();
 
-        // Agrupar por mes
         const wasted = history.filter(h => h.finalStatus === 'wasted');
         const monthsData = {};
 
-        // Generar ultimos 6 meses
         const today = new Date();
         for (let i = 5; i >= 0; i--) {
             const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
@@ -515,8 +618,10 @@ const UI = {
                 datasets: [{
                     label: 'Productos Vencidos',
                     data: Object.values(monthsData),
-                    backgroundColor: '#ef4444',
-                    borderRadius: 4
+                    backgroundColor: '#FF3B30',
+                    borderRadius: 8,
+                    borderSkipped: false,
+                    barThickness: 28
                 }]
             },
             options: {
@@ -526,8 +631,19 @@ const UI = {
                     legend: { display: false }
                 },
                 scales: {
-                    y: { beginAtZero: true, ticks: { stepSize: 1, color: textColor }, grid: { color: '#E5E5EA' } },
-                    x: { ticks: { color: textColor }, grid: { display: false } }
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1, color: textColor, font: { family: 'Inter', weight: '600', size: 10 } },
+                        grid: { color: '#F0F0F0', drawBorder: false }
+                    },
+                    x: {
+                        ticks: { color: textColor, font: { family: 'Inter', weight: '600', size: 10 } },
+                        grid: { display: false }
+                    }
+                },
+                animation: {
+                    duration: 800,
+                    easing: 'easeOutQuart'
                 }
             }
         });
@@ -535,8 +651,9 @@ const UI = {
 
     // --- Actions ---
     async processProduct(id, finalStatus) {
+        Utils.haptic('medium');
         const title = finalStatus === 'consumed' ? '¿Consumiste este producto?' : '¿Reportar como desperdicio?';
-        const confirmColor = finalStatus === 'consumed' ? '#10b981' : '#ef4444';
+        const confirmColor = finalStatus === 'consumed' ? '#34C759' : '#FF3B30';
         const icon = finalStatus === 'consumed' ? 'success' : 'warning';
         const text = finalStatus === 'wasted' ? 'El valor del producto se sumará a tus pérdidas estimadas.' : '';
 
@@ -545,14 +662,14 @@ const UI = {
             html: `
                 <p class="text-sm text-ios-textSub mb-4">${text}</p>
                 <div class="flex items-center justify-center mt-2">
-                    <input type="checkbox" id="add-to-shopping" checked class="w-5 h-5 text-ios-black border-gray-300 rounded focus:ring-ios-black cursor-pointer">
-                    <label for="add-to-shopping" class="ml-2 text-sm font-medium text-ios-textTitle cursor-pointer">¿Agregar a la lista de compras?</label>
+                    <input type="checkbox" id="add-to-shopping" checked class="w-5 h-5 text-ios-black border-gray-300 rounded-lg focus:ring-ios-black cursor-pointer accent-black">
+                    <label for="add-to-shopping" class="ml-2 text-sm font-semibold text-ios-textTitle cursor-pointer">¿Agregar a la lista de compras?</label>
                 </div>
             `,
             icon: icon,
             showCancelButton: true,
             confirmButtonColor: confirmColor,
-            cancelButtonColor: '#6b7280',
+            cancelButtonColor: '#8E8E93',
             confirmButtonText: 'Sí, confirmar',
             cancelButtonText: 'Cancelar',
             preConfirm: () => {
@@ -562,6 +679,7 @@ const UI = {
         });
 
         if (result.isConfirmed) {
+            Utils.haptic('success');
             const product = await db.get(STORE_PRODUCTS, id);
             await Logic.moveToHistory(id, finalStatus);
 
@@ -570,10 +688,10 @@ const UI = {
             }
 
             Swal.fire({
-                title: 'Actualizado!',
+                title: '¡Actualizado!',
                 text: 'El inventario ha sido actualizado.',
                 icon: 'success',
-                timer: 1500,
+                timer: 1200,
                 showConfirmButton: false
             });
             await UI.refreshAll();
@@ -600,21 +718,21 @@ const UI = {
         pt += "¿Qué receta puedo cocinar hoy para aprovechar especialmente los urgentes?";
 
         Swal.fire({
-            title: 'Sugerencia de Chef',
+            title: '🍳 Chef Inteligente',
             html: `
-                <div class="text-left bg-ios-sec p-4 rounded-xl text-sm text-ios-textTitle mb-4 max-h-48 overflow-y-auto whitespace-pre-wrap">${pt}</div>
-                <p class="text-xs text-ios-textSub">Copia este texto y pégalo en ChatGPT para obtener ideas increíbles.</p>
+                <div class="text-left bg-gray-50 p-4 rounded-2xl text-sm text-ios-textTitle mb-4 max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-xs">${pt}</div>
+                <p class="text-xs text-ios-textSub font-medium">Copia este texto y pégalo en ChatGPT para obtener ideas increíbles.</p>
             `,
             icon: 'info',
             showCancelButton: true,
             confirmButtonText: '<i class="fa-solid fa-copy"></i> Copiar',
             cancelButtonText: '<i class="fa-solid fa-up-right-from-square"></i> Abrir ChatGPT',
-            cancelButtonColor: '#10b981',
+            cancelButtonColor: '#34C759',
             confirmButtonColor: '#000000',
         }).then((result) => {
             if (result.isConfirmed) {
                 navigator.clipboard.writeText(pt).then(() => {
-                    Swal.fire({ title: '¡Copiado!', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 1500 });
+                    Swal.fire({ title: '¡Copiado!', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 1200 });
                 });
             } else if (result.dismiss === Swal.DismissReason.cancel) {
                 navigator.clipboard.writeText(pt).then(() => {
@@ -630,7 +748,6 @@ const UI = {
         const panel = modal.querySelector('#modal-panel');
         if (show) {
             modal.classList.remove('hidden');
-            // Trigger reflow
             void modal.offsetWidth;
             modal.classList.remove('opacity-0');
             modal.classList.add('opacity-100');
@@ -654,17 +771,18 @@ const UI = {
         target.classList.add('block');
 
         document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-        document.querySelector(`[data-target="${targetId}"]`).classList.add('active');
+        const activeBtn = document.querySelector(`[data-target="${targetId}"]`);
+        if (activeBtn) activeBtn.classList.add('active');
 
         currentView = targetId;
-        window.scrollTo(0, 0);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 };
 
-window.UI = UI; // Expose for inline onclick handlers
+window.UI = UI;
 
 // ==========================================
-// 5. ESCÁNER DE CÓDIGO DE BARRAS
+// 6. ESCÁNER DE CÓDIGO DE BARRAS
 // ==========================================
 const Scanner = {
     init() {
@@ -675,20 +793,22 @@ const Scanner = {
 
     start() {
         this.init();
+        Utils.haptic('medium');
         UI.toggleModal('modal-scanner', true);
 
-        const config = { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 };
+        const config = { fps: 15, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 };
 
         html5QrCode.start(
             { facingMode: "environment" },
             config,
             (decodedText, decodedResult) => {
-                // Success
+                // Success — haptic feedback
+                Utils.haptic('success');
                 this.stop();
                 document.getElementById('prod-barcode').value = decodedText;
 
-                // Fetch de OpenFoodFacts
-                if (window.API) window.API.fetchProduct(decodedText);
+                // Immediately fetch product info
+                BarcodeAPI.lookup(decodedText);
             },
             (errorMessage) => {
                 // Ignore errors (scanning empty frames)
@@ -712,7 +832,115 @@ const Scanner = {
 };
 
 // ==========================================
-// 6. EXPORTAR E IMPORTAR (Excel)
+// 7. BARCODE API (OpenFoodFacts) — Enhanced
+// ==========================================
+const BarcodeAPI = {
+    _cache: new Map(),
+
+    showLoading(show) {
+        const status = document.getElementById('barcode-status');
+        const wrapper = document.getElementById('barcode-field-wrapper');
+        if (show) {
+            status?.classList.remove('hidden');
+            wrapper?.classList.add('barcode-loading');
+        } else {
+            status?.classList.add('hidden');
+            wrapper?.classList.remove('barcode-loading');
+        }
+    },
+
+    async lookup(barcode) {
+        if (!barcode || barcode.length < 4) return;
+
+        // Check cache first
+        if (this._cache.has(barcode)) {
+            this._applyData(this._cache.get(barcode));
+            return;
+        }
+
+        this.showLoading(true);
+
+        try {
+            const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+            const data = await res.json();
+
+            if (data.status === 1 && data.product) {
+                const p = data.product;
+
+                const productData = {
+                    name: p.product_name_es || p.product_name || '',
+                    brand: p.brands ? p.brands.split(',')[0].trim() : '',
+                    category: this._mapCategory(p.categories_hierarchy || []),
+                    imageUrl: p.image_front_small_url || null
+                };
+
+                // Cache for fast subsequent lookups
+                this._cache.set(barcode, productData);
+                this._applyData(productData);
+            } else {
+                this.showLoading(false);
+            }
+        } catch (e) {
+            console.warn("OpenFoodFacts offline o error:", e);
+            this.showLoading(false);
+        }
+    },
+
+    _applyData(data) {
+        this.showLoading(false);
+
+        const nameInput = document.getElementById('prod-name');
+        const brandInput = document.getElementById('prod-brand');
+        const catInput = document.getElementById('prod-category');
+        const wrapper = document.getElementById('barcode-field-wrapper');
+
+        if (data.name && nameInput) {
+            nameInput.value = data.name;
+            nameInput.classList.add('barcode-found');
+            setTimeout(() => nameInput.classList.remove('barcode-found'), 600);
+        }
+        if (data.brand && brandInput) {
+            brandInput.value = data.brand;
+        }
+        if (data.category && catInput) {
+            catInput.value = data.category;
+        }
+
+        // Show success toast
+        if (data.name) {
+            Utils.haptic('success');
+            Swal.fire({
+                title: '✅ Producto Encontrado',
+                text: data.name,
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false,
+                toast: true,
+                position: 'top-end'
+            });
+        }
+    },
+
+    _mapCategory(hierarchy) {
+        const catStr = hierarchy.join(' ').toLowerCase();
+        if (catStr.includes('milk') || catStr.includes('cheese') || catStr.includes('dairy') || catStr.includes('lácteos') || catStr.includes('quesos') || catStr.includes('yogurt')) return 'Lácteos';
+        if (catStr.includes('meat') || catStr.includes('carnes') || catStr.includes('poultry') || catStr.includes('chicken') || catStr.includes('beef')) return 'Carnes';
+        if (catStr.includes('plant-based') || catStr.includes('vegetable') || catStr.includes('verduras') || catStr.includes('vegetales') || catStr.includes('fruit')) return 'Verduras';
+        if (catStr.includes('beverage') || catStr.includes('bebidas') || catStr.includes('drinks') || catStr.includes('water') || catStr.includes('juice') || catStr.includes('soda')) return 'Bebidas';
+        if (catStr.includes('clean') || catStr.includes('detergent') || catStr.includes('limpieza') || catStr.includes('soap')) return 'Limpieza';
+        return 'Otros';
+    }
+};
+
+// Keep backward compat
+window.API = {
+    fetchProduct(barcode) {
+        BarcodeAPI.lookup(barcode);
+    }
+};
+
+// ==========================================
+// 8. EXPORTAR E IMPORTAR (Excel)
 // ==========================================
 const DataSync = {
     async exportToExcel() {
@@ -720,11 +948,11 @@ const DataSync = {
             const products = await db.getAll(STORE_PRODUCTS);
             const history = await db.getAll(STORE_HISTORY);
 
-            // Format Data
             const wsProducts = XLSX.utils.json_to_sheet(products.map(p => ({
                 ID: p.id,
                 Código: p.barcode || '',
                 Nombre: p.name,
+                Marca: p.brand || '',
                 Categoría: p.category,
                 Precio: p.price,
                 Vencimiento: p.expiryDate,
@@ -747,13 +975,18 @@ const DataSync = {
 
             XLSX.writeFile(wb, `Inventario_${new Date().toISOString().split('T')[0]}.xlsx`);
 
-            Swal.fire('Exportado', 'El archivo Excel se ha descargado.', 'success');
+            Swal.fire({
+                title: 'Exportado',
+                text: 'El archivo Excel se ha descargado.',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false
+            });
         } catch (e) {
             Swal.fire('Error', 'No se pudo exportar: ' + e.message, 'error');
         }
     },
 
-    // Importar requiere que el usuario escoja un archivo compatible
     async importFromExcel(file) {
         const reader = new FileReader();
         reader.onload = async (e) => {
@@ -761,7 +994,6 @@ const DataSync = {
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
 
-                // Read primera hoja (Inventario)
                 const firstSheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[firstSheetName];
                 const json = XLSX.utils.sheet_to_json(worksheet);
@@ -774,6 +1006,7 @@ const DataSync = {
                         await Logic.addProduct({
                             barcode: row.Código?.toString() || '',
                             name: row.Nombre,
+                            brand: row.Marca || '',
                             category: row.Categoría || 'Otros',
                             price: parseFloat(row.Precio) || 0,
                             expiryDate: row.Vencimiento
@@ -782,7 +1015,13 @@ const DataSync = {
                     }
                 }
 
-                Swal.fire('Importación Exitosa', `Se importaron ${count} productos.`, 'success');
+                Swal.fire({
+                    title: `Importación Exitosa`,
+                    text: `Se importaron ${count} productos.`,
+                    icon: 'success',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
             } catch (err) {
                 Swal.fire('Error', 'Error al leer el archivo. Asegúrate de que tenga el formato correcto.', 'error');
             }
@@ -792,7 +1031,7 @@ const DataSync = {
 };
 
 // ==========================================
-// 7. INICIALIZACIÓN Y EVENT LISTENERS
+// 9. INICIALIZACIÓN Y EVENT LISTENERS
 // ==========================================
 document.addEventListener('DOMContentLoaded', async () => {
 
@@ -812,7 +1051,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    document.getElementById('btn-menu-toggle')?.addEventListener('click', () => toggleMenu(true));
+    document.getElementById('btn-menu-toggle')?.addEventListener('click', () => {
+        Utils.haptic('light');
+        toggleMenu(true);
+    });
     document.getElementById('side-menu-bg')?.addEventListener('click', () => toggleMenu(false));
 
     // DB Init
@@ -828,6 +1070,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('.nav-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
+            Utils.haptic('light');
             const target = btn.getAttribute('data-target');
             document.querySelectorAll('.nav-btn').forEach(b => {
                 b.classList.remove('active', 'text-ios-black');
@@ -837,7 +1080,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             UI.navigate(target);
             toggleMenu(false);
 
-            // Fix heading text
             const titleMap = {
                 'view-dashboard': 'Inventario',
                 'view-inventory': 'Lista',
@@ -851,9 +1093,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Modals & Form
     document.getElementById('btn-add').addEventListener('click', () => {
+        Utils.haptic('medium');
         document.getElementById('product-form').reset();
         document.getElementById('prod-id').value = '';
-        // Set default date to 1 week from now
         const d = new Date();
         d.setDate(d.getDate() + 7);
         document.getElementById('prod-date').value = d.toISOString().split('T')[0];
@@ -871,10 +1113,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('product-form').addEventListener('submit', async (e) => {
         e.preventDefault();
+        Utils.haptic('success');
 
         const data = {
             barcode: document.getElementById('prod-barcode').value.trim(),
             name: document.getElementById('prod-name').value.trim(),
+            brand: document.getElementById('prod-brand').value.trim(),
             category: document.getElementById('prod-category').value,
             price: document.getElementById('prod-price').value,
             expiryDate: document.getElementById('prod-date').value
@@ -883,14 +1127,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const id = document.getElementById('prod-id').value;
 
         if (id) {
-            // Update mode no implementado en detalle aún, insertamos nuevo por ahora si id estaba vacío
+            // Update mode
         } else {
             await Logic.addProduct(data);
             Swal.fire({
-                title: 'Guardado',
+                title: '✅ Guardado',
                 text: 'Producto agregado exitosamente',
                 icon: 'success',
-                timer: 1500,
+                timer: 1200,
                 showConfirmButton: false
             });
         }
@@ -921,19 +1165,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         DataSync.exportToExcel();
     });
 
-    // Autocompletado manual de codigo de barras
-    document.getElementById('prod-barcode')?.addEventListener('blur', (e) => {
-        if (window.API) window.API.fetchProduct(e.target.value.trim());
+    // Barcode auto-lookup — debounced on input (not just blur)
+    const barcodeInput = document.getElementById('prod-barcode');
+    const debouncedLookup = Utils.debounce((val) => {
+        if (val.length >= 8) {
+            BarcodeAPI.lookup(val);
+        }
+    }, 500);
+
+    barcodeInput?.addEventListener('input', (e) => {
+        debouncedLookup(e.target.value.trim());
     });
 
-    // Boton borrar comprados
+    // Also on blur for immediate trigger
+    barcodeInput?.addEventListener('blur', (e) => {
+        const val = e.target.value.trim();
+        if (val.length >= 8) {
+            BarcodeAPI.lookup(val);
+        }
+    });
+
+    // Shopping clear
     document.getElementById('btn-clear-shopping')?.addEventListener('click', async () => {
+        Utils.haptic('medium');
         await Logic.clearCheckedShopping();
         UI.refreshAll();
     });
 
-    // Boton Gourmet
+    // Gourmet button
     document.getElementById('btn-gourmet')?.addEventListener('click', () => {
+        Utils.haptic('light');
         UI.generateRecipePrompt();
     });
 
@@ -945,52 +1206,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (e.target.files.length > 0) {
             DataSync.importFromExcel(e.target.files[0]);
         }
-        e.target.value = ''; // Reset
+        e.target.value = '';
     });
 });
-
-// ==========================================
-// 8. OPENFOODFACTS API
-// ==========================================
-window.API = {
-    async fetchProduct(barcode) {
-        if (!barcode) return;
-        try {
-            const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
-            const data = await res.json();
-            if (data.status === 1) {
-                const p = data.product;
-                document.getElementById('prod-name').value = p.product_name_es || p.product_name || '';
-
-                const brandInput = document.getElementById('prod-brand');
-                if (brandInput && p.brands) brandInput.value = p.brands.split(',')[0];
-
-                // Intentar mapear categoria
-                let cat = 'Otros';
-                const hierarchy = p.categories_hierarchy || [];
-                const catStr = hierarchy.join(' ').toLowerCase();
-                if (catStr.includes('milk') || catStr.includes('cheese') || catStr.includes('dairy') || catStr.includes('lácteos') || catStr.includes('quesos')) cat = 'Lácteos';
-                else if (catStr.includes('meat') || catStr.includes('carnes')) cat = 'Carnes';
-                else if (catStr.includes('plant-based') || catStr.includes('vegetable') || catStr.includes('verduras') || catStr.includes('vegetales')) cat = 'Verduras';
-                else if (catStr.includes('beverage') || catStr.includes('bebidas') || catStr.includes('drinks')) cat = 'Bebidas';
-
-                document.getElementById('prod-category').value = cat;
-
-                Swal.fire({
-                    title: 'Producto Encontrado',
-                    text: p.product_name_es || p.product_name,
-                    icon: 'success',
-                    timer: 1500,
-                    showConfirmButton: false,
-                    toast: true,
-                    position: 'top-end'
-                });
-            }
-        } catch (e) {
-            console.warn("OpenFoodFacts offline o error:", e);
-        }
-    }
-};
 
 // Registrar Service Worker para PWA
 if ('serviceWorker' in navigator) {
