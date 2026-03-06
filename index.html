@@ -396,14 +396,23 @@
 
                     <!-- Product image preview (shown when found via barcode) -->
                     <div id="product-image-preview" class="product-image-preview hidden">
-                        <img id="product-image-thumb" src="" alt="Imagen del producto">
-                        <div class="product-image-info">
-                            <span class="text-[10px] font-bold text-ios-textSub uppercase tracking-widest">Imagen del
-                                producto</span>
-                            <button type="button" id="btn-remove-image"
-                                class="text-xs text-status-danger font-semibold">
-                                <i class="fa-solid fa-xmark"></i> Quitar
-                            </button>
+                        <div class="product-image-card">
+                            <div class="product-image-wrapper">
+                                <img id="product-image-thumb" src="" alt="Imagen del producto">
+                                <div id="product-image-loading" class="product-image-loading hidden">
+                                    <i class="fa-solid fa-spinner fa-spin text-ios-textSub"></i>
+                                </div>
+                            </div>
+                            <div class="product-image-details">
+                                <span class="text-[10px] font-bold text-ios-textSub uppercase tracking-widest">Imagen
+                                    del producto</span>
+                                <p id="product-image-name" class="text-sm font-bold text-ios-textTitle mt-1 truncate">
+                                </p>
+                                <button type="button" id="btn-remove-image"
+                                    class="text-xs text-status-danger font-bold mt-2 flex items-center gap-1 hover:opacity-70 transition active:scale-95">
+                                    <i class="fa-solid fa-trash-can text-[10px]"></i> Quitar imagen
+                                </button>
+                            </div>
                         </div>
                     </div>
 
