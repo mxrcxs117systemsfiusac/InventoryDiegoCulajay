@@ -394,6 +394,19 @@
                             placeholder="Ej: Leche Deslactosada" autocomplete="off">
                     </div>
 
+                    <!-- Product image preview (shown when found via barcode) -->
+                    <div id="product-image-preview" class="product-image-preview hidden">
+                        <img id="product-image-thumb" src="" alt="Imagen del producto">
+                        <div class="product-image-info">
+                            <span class="text-[10px] font-bold text-ios-textSub uppercase tracking-widest">Imagen del
+                                producto</span>
+                            <button type="button" id="btn-remove-image"
+                                class="text-xs text-status-danger font-semibold">
+                                <i class="fa-solid fa-xmark"></i> Quitar
+                            </button>
+                        </div>
+                    </div>
+
                     <div>
                         <label class="text-[10px] font-bold text-ios-textSub uppercase tracking-widest">Marca</label>
                         <input type="text" id="prod-brand" class="ios-input w-full"
@@ -470,6 +483,25 @@
                     <div class="corner-bl"></div>
                     <div class="corner-br"></div>
                     <div class="scanner-laser"></div>
+                </div>
+            </div>
+
+            <!-- Processing overlay (shown after barcode detected) -->
+            <div id="scan-processing-overlay" class="scan-processing-overlay hidden">
+                <div class="scan-processing-content">
+                    <div id="scan-status-icon" class="scan-status-icon">
+                        <i class="fa-solid fa-barcode text-4xl text-white"></i>
+                    </div>
+                    <p id="scan-status-text" class="scan-status-text">Detectando código…</p>
+                    <div id="scan-progress-bar" class="scan-progress-bar">
+                        <div id="scan-progress-fill" class="scan-progress-fill"></div>
+                    </div>
+                    <!-- Product result card (shown on success) -->
+                    <div id="scan-result-card" class="scan-result-card hidden">
+                        <img id="scan-result-image" class="scan-result-image hidden" src="" alt="Producto">
+                        <p id="scan-result-name" class="scan-result-name"></p>
+                        <p id="scan-result-brand" class="scan-result-brand"></p>
+                    </div>
                 </div>
             </div>
         </div>

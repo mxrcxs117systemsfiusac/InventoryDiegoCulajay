@@ -782,18 +782,65 @@ const UI = {
 window.UI = UI;
 
 // ==========================================
-// 6. ESCÁNER DE CÓDIGO DE BARRAS
+// 6. ESCÁNER DE CÓDIGO DE BARRAS — Enhanced
 // ==========================================
 const Scanner = {
+    _audioCtx: null,
+
     init() {
         if (!html5QrCode) {
             html5QrCode = new Html5Qrcode("reader");
         }
     },
 
+    /** Generate a beep sound using Web Audio API */
+    playBeep() {
+        try {
+            if (!this._audioCtx) {
+                this._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            const ctx = this._audioCtx;
+
+            // Main beep tone
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.setValueAtTime(660, ctx.currentTime + 0.08);
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.15);
+
+            // Second beep (double-beep effect like supermarket scanners)
+            const osc2 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(880, ctx.currentTime + 0.18);
+            gain2.gain.setValueAtTime(0.2, ctx.currentTime + 0.18);
+            gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.30);
+
+            osc2.start(ctx.currentTime + 0.18);
+            osc2.stop(ctx.currentTime + 0.30);
+        } catch (e) {
+            console.warn('Audio not supported:', e);
+        }
+    },
+
     start() {
         this.init();
         Utils.haptic('medium');
+
+        // Reset processing overlay
+        this._resetOverlay();
+
         UI.toggleModal('modal-scanner', true);
 
         const config = { fps: 15, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 };
@@ -802,13 +849,21 @@ const Scanner = {
             { facingMode: "environment" },
             config,
             (decodedText, decodedResult) => {
-                // Success — haptic feedback
+                // Immediately play beep and trigger haptic
+                this.playBeep();
                 Utils.haptic('success');
-                this.stop();
-                document.getElementById('prod-barcode').value = decodedText;
 
-                // Immediately fetch product info
-                BarcodeAPI.lookup(decodedText);
+                // Flash the scanner frame green
+                const frame = document.querySelector('.scanner-frame');
+                if (frame) frame.classList.add('detected');
+
+                // Stop camera but keep modal open for processing animation
+                if (html5QrCode && html5QrCode.isScanning) {
+                    html5QrCode.stop().catch(err => console.error(err));
+                }
+
+                // Start the staged processing flow
+                this._runProcessingFlow(decodedText);
             },
             (errorMessage) => {
                 // Ignore errors (scanning empty frames)
@@ -820,7 +875,117 @@ const Scanner = {
         });
     },
 
+    /** Staged processing animation flow */
+    async _runProcessingFlow(barcode) {
+        const overlay = document.getElementById('scan-processing-overlay');
+        const statusText = document.getElementById('scan-status-text');
+        const statusIcon = document.getElementById('scan-status-icon');
+        const progressFill = document.getElementById('scan-progress-fill');
+        const resultCard = document.getElementById('scan-result-card');
+        const resultImage = document.getElementById('scan-result-image');
+        const resultName = document.getElementById('scan-result-name');
+        const resultBrand = document.getElementById('scan-result-brand');
+
+        // Show the overlay
+        overlay.classList.remove('hidden');
+
+        // STAGE 1: "Detectando código…" (800ms)
+        statusText.textContent = 'Detectando código…';
+        statusIcon.innerHTML = '<i class="fa-solid fa-barcode text-4xl text-white"></i>';
+        statusIcon.className = 'scan-status-icon';
+        progressFill.style.width = '30%';
+        progressFill.className = 'scan-progress-fill';
+
+        await this._delay(800);
+
+        // STAGE 2: "Buscando producto…" (API call)
+        statusText.textContent = 'Buscando producto…';
+        statusIcon.innerHTML = '<i class="fa-solid fa-magnifying-glass text-4xl text-white fa-beat-fade"></i>';
+        progressFill.style.width = '60%';
+
+        // Fetch product data from API
+        const productData = await BarcodeAPI.lookupAsync(barcode);
+
+        if (productData && productData.name) {
+            // STAGE 3 — SUCCESS
+            progressFill.style.width = '100%';
+            statusText.textContent = '¡Producto encontrado!';
+            statusIcon.innerHTML = '<i class="fa-solid fa-circle-check text-4xl text-status-safe"></i>';
+            statusIcon.className = 'scan-status-icon success';
+
+            // Show the result card
+            resultName.textContent = productData.name;
+            resultBrand.textContent = productData.brand || '';
+
+            if (productData.imageUrl) {
+                resultImage.src = productData.imageUrl;
+                resultImage.classList.remove('hidden');
+            } else {
+                resultImage.classList.add('hidden');
+            }
+            resultCard.className = 'scan-result-card';
+
+            // Apply data to form
+            document.getElementById('prod-barcode').value = barcode;
+            BarcodeAPI._applyData(productData);
+
+            // Wait for user to see the result
+            await this._delay(1800);
+        } else {
+            // STAGE 3 — ERROR
+            progressFill.style.width = '100%';
+            progressFill.classList.add('error');
+            statusText.textContent = 'Producto no encontrado';
+            statusIcon.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-4xl text-status-danger"></i>';
+            statusIcon.className = 'scan-status-icon error';
+
+            // Show error card
+            resultName.textContent = 'Producto no encontrado';
+            resultBrand.textContent = 'Intente escanear nuevamente o ingrese los datos manualmente.';
+            resultImage.classList.add('hidden');
+            resultCard.className = 'scan-result-card error';
+
+            // Still set the barcode
+            document.getElementById('prod-barcode').value = barcode;
+
+            await this._delay(2000);
+        }
+
+        // Close scanner modal
+        this._resetOverlay();
+        UI.toggleModal('modal-scanner', false);
+
+        // Reset scanner frame
+        const frame = document.querySelector('.scanner-frame');
+        if (frame) frame.classList.remove('detected');
+    },
+
+    _resetOverlay() {
+        const overlay = document.getElementById('scan-processing-overlay');
+        const progressFill = document.getElementById('scan-progress-fill');
+        const resultCard = document.getElementById('scan-result-card');
+        const resultImage = document.getElementById('scan-result-image');
+        const statusIcon = document.getElementById('scan-status-icon');
+
+        if (overlay) overlay.classList.add('hidden');
+        if (progressFill) {
+            progressFill.style.width = '0%';
+            progressFill.className = 'scan-progress-fill';
+        }
+        if (resultCard) resultCard.classList.add('hidden');
+        if (resultImage) resultImage.classList.add('hidden');
+        if (statusIcon) statusIcon.className = 'scan-status-icon';
+    },
+
+    _delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    },
+
     stop() {
+        this._resetOverlay();
+        const frame = document.querySelector('.scanner-frame');
+        if (frame) frame.classList.remove('detected');
+
         if (html5QrCode && html5QrCode.isScanning) {
             html5QrCode.stop().then(() => {
                 UI.toggleModal('modal-scanner', false);
@@ -849,16 +1014,14 @@ const BarcodeAPI = {
         }
     },
 
-    async lookup(barcode) {
-        if (!barcode || barcode.length < 4) return;
+    /** Returns product data or null (used by Scanner processing flow) */
+    async lookupAsync(barcode) {
+        if (!barcode || barcode.length < 4) return null;
 
         // Check cache first
         if (this._cache.has(barcode)) {
-            this._applyData(this._cache.get(barcode));
-            return;
+            return this._cache.get(barcode);
         }
-
-        this.showLoading(true);
 
         try {
             const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
@@ -866,23 +1029,50 @@ const BarcodeAPI = {
 
             if (data.status === 1 && data.product) {
                 const p = data.product;
-
                 const productData = {
                     name: p.product_name_es || p.product_name || '',
                     brand: p.brands ? p.brands.split(',')[0].trim() : '',
                     category: this._mapCategory(p.categories_hierarchy || []),
-                    imageUrl: p.image_front_small_url || null
+                    imageUrl: p.image_front_small_url || p.image_front_url || null
                 };
 
-                // Cache for fast subsequent lookups
                 this._cache.set(barcode, productData);
-                this._applyData(productData);
-            } else {
-                this.showLoading(false);
+                return productData;
             }
+            return null;
         } catch (e) {
             console.warn("OpenFoodFacts offline o error:", e);
+            return null;
+        }
+    },
+
+    /** Legacy lookup for manual barcode input — keeps the loading indicator behavior */
+    async lookup(barcode) {
+        if (!barcode || barcode.length < 4) return;
+
+        if (this._cache.has(barcode)) {
+            this._applyData(this._cache.get(barcode));
+            return;
+        }
+
+        this.showLoading(true);
+
+        const productData = await this.lookupAsync(barcode);
+
+        if (productData && productData.name) {
+            this._applyData(productData);
+        } else {
             this.showLoading(false);
+            // Show error toast for manual input
+            Swal.fire({
+                title: '❌ Producto no encontrado',
+                text: 'Intente escanear nuevamente o ingrese los datos manualmente.',
+                icon: 'warning',
+                timer: 2500,
+                showConfirmButton: false,
+                toast: true,
+                position: 'top-end'
+            });
         }
     },
 
@@ -892,7 +1082,8 @@ const BarcodeAPI = {
         const nameInput = document.getElementById('prod-name');
         const brandInput = document.getElementById('prod-brand');
         const catInput = document.getElementById('prod-category');
-        const wrapper = document.getElementById('barcode-field-wrapper');
+        const imagePreview = document.getElementById('product-image-preview');
+        const imageThumb = document.getElementById('product-image-thumb');
 
         if (data.name && nameInput) {
             nameInput.value = data.name;
@@ -904,6 +1095,12 @@ const BarcodeAPI = {
         }
         if (data.category && catInput) {
             catInput.value = data.category;
+        }
+
+        // Show product image if available
+        if (data.imageUrl && imagePreview && imageThumb) {
+            imageThumb.src = data.imageUrl;
+            imagePreview.classList.remove('hidden');
         }
 
         // Show success toast
@@ -1100,7 +1297,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         d.setDate(d.getDate() + 7);
         document.getElementById('prod-date').value = d.toISOString().split('T')[0];
 
+        // Reset product image preview
+        const imagePreview = document.getElementById('product-image-preview');
+        if (imagePreview) imagePreview.classList.add('hidden');
+
         UI.toggleModal('modal-add', true);
+    });
+
+    // Remove image button in form
+    document.getElementById('btn-remove-image')?.addEventListener('click', () => {
+        const imagePreview = document.getElementById('product-image-preview');
+        if (imagePreview) imagePreview.classList.add('hidden');
     });
 
     document.getElementById('btn-close-modal').addEventListener('click', () => {
