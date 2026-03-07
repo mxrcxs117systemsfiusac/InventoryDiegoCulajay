@@ -1,10 +1,11 @@
-const CACHE_NAME = 'inventory-app-v3.0-pro';
+const CACHE_NAME = 'inventory-app-v3.1-pro';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
     './style.css',
     './script.js',
     './manifest.json',
+    './assets/scanner-beep.wav',
     'https://cdn.tailwindcss.com',
     'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',

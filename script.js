@@ -1162,6 +1162,35 @@ const DataSync = {
                 FechaSalida: h.dateRemoved
             })));
 
+            // Formato de Columnas (Anchos)
+            wsProducts['!cols'] = [
+                { wch: 6 },  // ID
+                { wch: 15 }, // Código
+                { wch: 35 }, // Nombre
+                { wch: 15 }, // Marca
+                { wch: 15 }, // Categoría
+                { wch: 10 }, // Precio
+                { wch: 12 }, // Vencimiento
+                { wch: 12 }  // Agregado
+            ];
+            wsHistory['!cols'] = [
+                { wch: 6 },  // ID
+                { wch: 15 }, // Código
+                { wch: 35 }, // Nombre
+                { wch: 15 }, // Categoría
+                { wch: 10 }, // Precio
+                { wch: 15 }, // Resultado
+                { wch: 12 }  // FechaSalida
+            ];
+
+            // Filtros Automáticos para ambas hojas
+            if (products.length > 0) {
+                wsProducts['!autofilter'] = { ref: "A1:H1" };
+            }
+            if (history.length > 0) {
+                wsHistory['!autofilter'] = { ref: "A1:G1" };
+            }
+
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, wsProducts, "Inventario Activo");
             XLSX.utils.book_append_sheet(wb, wsHistory, "Historial");
