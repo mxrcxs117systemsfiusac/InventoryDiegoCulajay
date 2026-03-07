@@ -796,11 +796,10 @@ const Scanner = {
     /** Play beep sound from assets */
     async playBeep() {
         try {
-            if (!this._beepAudio) {
-                this._beepAudio = new Audio('assets/scanner-beep.wav');
+            if (this._beepAudio) {
+                this._beepAudio.currentTime = 0;
+                await this._beepAudio.play();
             }
-            this._beepAudio.currentTime = 0;
-            await this._beepAudio.play();
         } catch (e) {
             console.warn('Audio not supported or file missing:', e);
         }
@@ -809,6 +808,15 @@ const Scanner = {
     start() {
         this.init();
         Utils.haptic('medium');
+
+        // Unlock audio on user interaction (bypasses iOS/Chrome Autoplay policies)
+        if (!this._beepAudio) {
+            this._beepAudio = new Audio('assets/scanner-beep.wav');
+        }
+        this._beepAudio.play().then(() => {
+            this._beepAudio.pause();
+            this._beepAudio.currentTime = 0;
+        }).catch(err => console.warn('Audio unlock failed:', err));
 
         // Reset processing overlay
         this._resetOverlay();
