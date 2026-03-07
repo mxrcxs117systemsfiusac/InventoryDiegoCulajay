@@ -793,49 +793,16 @@ const Scanner = {
         }
     },
 
-    /** Generate a beep sound using Web Audio API */
+    /** Play beep sound from assets */
     async playBeep() {
         try {
-            if (!this._audioCtx) {
-                this._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (!this._beepAudio) {
+                this._beepAudio = new Audio('assets/scanner-beep.wav');
             }
-            const ctx = this._audioCtx;
-
-            // Resume AudioContext — browsers block audio until user gesture
-            if (ctx.state === 'suspended') {
-                await ctx.resume();
-            }
-
-            // Main beep tone — louder and clearer
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-
-            osc.type = 'square';
-            osc.frequency.setValueAtTime(1200, ctx.currentTime);
-            osc.frequency.setValueAtTime(900, ctx.currentTime + 0.1);
-            gain.gain.setValueAtTime(0.5, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.18);
-
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + 0.18);
-
-            // Second beep (double-beep effect like supermarket scanners)
-            const osc2 = ctx.createOscillator();
-            const gain2 = ctx.createGain();
-            osc2.connect(gain2);
-            gain2.connect(ctx.destination);
-
-            osc2.type = 'square';
-            osc2.frequency.setValueAtTime(1200, ctx.currentTime + 0.25);
-            gain2.gain.setValueAtTime(0.4, ctx.currentTime + 0.25);
-            gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.40);
-
-            osc2.start(ctx.currentTime + 0.25);
-            osc2.stop(ctx.currentTime + 0.40);
+            this._beepAudio.currentTime = 0;
+            await this._beepAudio.play();
         } catch (e) {
-            console.warn('Audio not supported:', e);
+            console.warn('Audio not supported or file missing:', e);
         }
     },
 
@@ -894,49 +861,42 @@ const Scanner = {
         // Show the overlay
         overlay.classList.remove('hidden');
 
-        // STAGE 1: "Detectando código…" (1.2s)
+        // STAGE 1: "Detectando código…" (400ms)
         statusText.textContent = 'Detectando código…';
         statusIcon.innerHTML = '<i class="fa-solid fa-barcode text-4xl text-white"></i>';
         statusIcon.className = 'scan-status-icon';
-        progressFill.style.width = '15%';
+        progressFill.style.width = '20%';
         progressFill.className = 'scan-progress-fill';
 
-        await this._delay(1200);
+        await this._delay(400);
 
-        // STAGE 2: "Código detectado" (1s)
-        statusText.textContent = 'Código detectado: ' + barcode;
+        // STAGE 2: "Escaneando…" (400ms)
+        statusText.textContent = 'Escaneando producto: ' + barcode;
         statusIcon.innerHTML = '<i class="fa-solid fa-qrcode text-4xl text-white"></i>';
-        progressFill.style.width = '35%';
+        progressFill.style.width = '50%';
 
-        await this._delay(1000);
+        await this._delay(400);
 
-        // STAGE 3: "Buscando producto…" (API call + minimum 1.2s)
-        statusText.textContent = 'Buscando producto en la base de datos…';
+        // STAGE 3: "Buscando producto…" (API call + minimum 400ms)
+        statusText.textContent = 'Buscando producto…';
         statusIcon.innerHTML = '<i class="fa-solid fa-magnifying-glass text-4xl text-white fa-beat-fade"></i>';
-        progressFill.style.width = '55%';
+        progressFill.style.width = '75%';
 
         // Fetch product data from API (with minimum animation time)
         const [productData] = await Promise.all([
             BarcodeAPI.lookupAsync(barcode),
-            this._delay(1200)
+            this._delay(400)
         ]);
 
         if (productData && productData.name) {
-            // STAGE 4: "Cargando información…" (800ms)
-            progressFill.style.width = '80%';
-            statusText.textContent = 'Cargando información del producto…';
-            statusIcon.innerHTML = '<i class="fa-solid fa-box-open text-4xl text-white fa-bounce"></i>';
-
             // Preload image if available
             if (productData.imageUrl) {
                 const img = new Image();
                 img.src = productData.imageUrl;
-                await Promise.race([new Promise(r => { img.onload = r; img.onerror = r; }), this._delay(1500)]);
-            } else {
-                await this._delay(800);
+                await Promise.race([new Promise(r => { img.onload = r; img.onerror = r; }), this._delay(800)]);
             }
 
-            // STAGE 5 — SUCCESS: "¡Producto encontrado!" (2.5s visible)
+            // STAGE 4 — SUCCESS: "¡Producto encontrado!" (1.2s visible)
             progressFill.style.width = '100%';
             statusText.textContent = '¡Producto encontrado!';
             statusIcon.innerHTML = '<i class="fa-solid fa-circle-check text-4xl text-status-safe"></i>';
@@ -945,7 +905,6 @@ const Scanner = {
             // Show the result card with product info
             resultName.textContent = productData.name;
             resultBrand.textContent = productData.brand || '';
-
             if (productData.imageUrl) {
                 resultImage.src = productData.imageUrl;
                 resultImage.classList.remove('hidden');
@@ -953,31 +912,29 @@ const Scanner = {
                 resultImage.classList.add('hidden');
             }
             resultCard.className = 'scan-result-card';
+            resultCard.classList.remove('hidden');
 
-            // Apply data to form
             document.getElementById('prod-barcode').value = barcode;
             BarcodeAPI._applyData(productData);
 
-            // Wait for user to see the result
-            await this._delay(2500);
+            await this._delay(1200);
         } else {
-            // STAGE 4 — ERROR
+            // STAGE 4 — ERROR: "Producto no encontrado" (1.5s visible)
             progressFill.style.width = '100%';
             progressFill.classList.add('error');
             statusText.textContent = 'Producto no encontrado';
             statusIcon.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-4xl text-status-danger"></i>';
             statusIcon.className = 'scan-status-icon error';
 
-            // Show error card
-            resultName.textContent = 'Producto no encontrado';
-            resultBrand.textContent = 'Intente escanear nuevamente o ingrese los datos manualmente.';
+            resultName.textContent = 'Puedes agregarlo manualmente.';
+            resultBrand.textContent = 'Escribe el nombre y agrega foto.';
             resultImage.classList.add('hidden');
             resultCard.className = 'scan-result-card error';
+            resultCard.classList.remove('hidden');
 
-            // Still set the barcode
             document.getElementById('prod-barcode').value = barcode;
 
-            await this._delay(2500);
+            await this._delay(1500);
         }
 
         // Close scanner modal
@@ -1111,8 +1068,9 @@ const BarcodeAPI = {
         const nameInput = document.getElementById('prod-name');
         const brandInput = document.getElementById('prod-brand');
         const catInput = document.getElementById('prod-category');
-        const imagePreview = document.getElementById('product-image-preview');
         const imageThumb = document.getElementById('product-image-thumb');
+        const btnRemoveImage = document.getElementById('btn-remove-image');
+        const btnScan = document.getElementById('btn-scan');
 
         if (data.name && nameInput) {
             nameInput.value = data.name;
@@ -1127,11 +1085,10 @@ const BarcodeAPI = {
         }
 
         // Show product image if available
-        if (data.imageUrl && imagePreview && imageThumb) {
+        if (data.imageUrl && imageThumb) {
             imageThumb.src = data.imageUrl;
-            const imageName = document.getElementById('product-image-name');
-            if (imageName) imageName.textContent = data.name || '';
-            imagePreview.classList.remove('hidden');
+            imageThumb.classList.remove('hidden');
+            if (btnRemoveImage) btnRemoveImage.classList.remove('hidden');
         }
 
         // Show success toast
@@ -1329,16 +1286,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('prod-date').value = d.toISOString().split('T')[0];
 
         // Reset product image preview
-        const imagePreview = document.getElementById('product-image-preview');
-        if (imagePreview) imagePreview.classList.add('hidden');
+        const imageThumb = document.getElementById('product-image-thumb');
+        const btnRemoveImage = document.getElementById('btn-remove-image');
+        if (imageThumb) {
+            imageThumb.src = '';
+            imageThumb.classList.add('hidden');
+        }
+        if (btnRemoveImage) btnRemoveImage.classList.add('hidden');
 
         UI.toggleModal('modal-add', true);
     });
 
     // Remove image button in form
     document.getElementById('btn-remove-image')?.addEventListener('click', () => {
-        const imagePreview = document.getElementById('product-image-preview');
-        if (imagePreview) imagePreview.classList.add('hidden');
+        const imageThumb = document.getElementById('product-image-thumb');
+        const btnRemoveImage = document.getElementById('btn-remove-image');
+        if (imageThumb) {
+            imageThumb.src = '';
+            imageThumb.classList.add('hidden');
+        }
+        if (btnRemoveImage) btnRemoveImage.classList.add('hidden');
     });
 
     document.getElementById('btn-close-modal').addEventListener('click', () => {

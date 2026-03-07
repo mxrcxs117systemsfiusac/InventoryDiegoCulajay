@@ -368,51 +368,51 @@
                 <form id="product-form" class="space-y-5">
                     <input type="hidden" id="prod-id">
 
-                    <div>
-                        <div class="flex justify-between items-end">
-                            <label class="text-[10px] font-bold text-ios-textSub uppercase tracking-widest">Código de
-                                Barras</label>
+                    <!-- Product Header Card: Photo + Barcode + Name -->
+                    <div class="bg-gray-50 rounded-2xl p-4 border border-ios-border/50 flex gap-4 items-center mb-2">
+                        <!-- Left: Product Image & Scanner Button -->
+                        <div
+                            class="relative w-24 h-24 shrink-0 bg-white rounded-xl border border-ios-border flex flex-col items-center justify-center overflow-hidden shadow-sm">
+                            <img id="product-image-thumb" src="" alt="Producto"
+                                class="absolute inset-0 w-full h-full object-contain hidden z-10 bg-white">
+
+                            <!-- Scanner Trigger -->
                             <button type="button" id="btn-scan"
-                                class="text-ios-black active:scale-90 transition-transform">
-                                <i class="fa-solid fa-camera text-xl h-6"></i>
+                                class="absolute inset-0 w-full h-full flex flex-col items-center justify-center text-ios-textSub hover:bg-gray-50 transition active:scale-95 z-0">
+                                <i class="fa-solid fa-camera text-3xl mb-1 text-ios-black"></i>
+                                <span
+                                    class="text-[9px] font-bold uppercase tracking-wider text-ios-black">Escanear</span>
                             </button>
-                        </div>
-                        <div class="relative" id="barcode-field-wrapper">
-                            <input type="text" id="prod-barcode" class="ios-input w-full"
-                                placeholder="Escanear o tipear..." autocomplete="off">
-                            <!-- Barcode lookup status indicator -->
-                            <div id="barcode-status" class="absolute right-0 bottom-3 hidden">
-                                <i class="fa-solid fa-spinner fa-spin text-ios-textSub"></i>
+
+                            <div id="product-image-loading"
+                                class="absolute inset-0 bg-white/80 z-20 hidden items-center justify-center">
+                                <i class="fa-solid fa-spinner fa-spin text-ios-textSub text-xl"></i>
                             </div>
                         </div>
-                    </div>
 
-                    <div>
-                        <label class="text-[10px] font-bold text-ios-textSub uppercase tracking-widest">Nombre del
-                            Producto *</label>
-                        <input type="text" id="prod-name" required class="ios-input w-full"
-                            placeholder="Ej: Leche Deslactosada" autocomplete="off">
-                    </div>
-
-                    <!-- Product image preview (shown when found via barcode) -->
-                    <div id="product-image-preview" class="product-image-preview hidden">
-                        <div class="product-image-card">
-                            <div class="product-image-wrapper">
-                                <img id="product-image-thumb" src="" alt="Imagen del producto">
-                                <div id="product-image-loading" class="product-image-loading hidden">
-                                    <i class="fa-solid fa-spinner fa-spin text-ios-textSub"></i>
+                        <!-- Right: Info Details -->
+                        <div class="flex-1 min-w-0 flex flex-col justify-center gap-1.5" id="barcode-field-wrapper">
+                            <!-- Barcode Field -->
+                            <div class="relative flex items-center">
+                                <i class="fa-solid fa-barcode text-ios-textSub text-[10px] mr-1.5"></i>
+                                <input type="text" id="prod-barcode"
+                                    class="w-full bg-transparent text-xs font-mono font-medium text-ios-textSub placeholder:text-gray-400 outline-none"
+                                    placeholder="Código de barras..." autocomplete="off">
+                                <div id="barcode-status" class="absolute right-0 hidden">
+                                    <i class="fa-solid fa-spinner fa-spin text-ios-textSub text-xs"></i>
                                 </div>
                             </div>
-                            <div class="product-image-details">
-                                <span class="text-[10px] font-bold text-ios-textSub uppercase tracking-widest">Imagen
-                                    del producto</span>
-                                <p id="product-image-name" class="text-sm font-bold text-ios-textTitle mt-1 truncate">
-                                </p>
-                                <button type="button" id="btn-remove-image"
-                                    class="text-xs text-status-danger font-bold mt-2 flex items-center gap-1 hover:opacity-70 transition active:scale-95">
-                                    <i class="fa-solid fa-trash-can text-[10px]"></i> Quitar imagen
-                                </button>
-                            </div>
+
+                            <!-- Product Name Field -->
+                            <input type="text" id="prod-name" required
+                                class="w-full bg-transparent text-lg font-bold text-ios-textTitle placeholder:text-gray-400 outline-none truncate"
+                                placeholder="Nombre completo" autocomplete="off">
+
+                            <!-- Removable Image Button -->
+                            <button type="button" id="btn-remove-image"
+                                class="hidden text-[10px] text-status-danger font-bold mt-1.5 flex items-center gap-1 hover:opacity-70 transition w-fit">
+                                <i class="fa-solid fa-trash-can text-[9px]"></i> Quitar foto
+                            </button>
                         </div>
                     </div>
 
@@ -519,7 +519,7 @@
         <div
             class="p-6 bg-gradient-to-t from-black/90 to-transparent text-white text-center pb-safe z-30 w-full absolute bottom-0">
             <p class="font-semibold text-white/90 text-sm mb-1">Centra el código de barras</p>
-            <p class="text-white/50 text-xs">Se detectará automáticamente</p>
+            <p class="text-white/50 text-xs">Se escaneará automáticamente</p>
         </div>
     </div>
 
