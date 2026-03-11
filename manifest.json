@@ -1,6 +1,6 @@
 {
-  "name": "Gestión de Inventario Doméstico",
-  "short_name": "Inventario",
+  "name": "SmartInventory",
+  "short_name": "SmartInventory",
   "description": "App Progresiva para gestionar productos de tu hogar y fechas de vencimiento.",
   "start_url": "index.html",
   "display": "standalone",

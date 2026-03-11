@@ -31,6 +31,28 @@
     -webkit-tap-highlight-color: transparent;
 }
 
+html.dark body {
+    background-color: var(--ios-bg);
+    color: var(--ios-textTitle);
+}
+
+html.dark .bg-white {
+    background-color: var(--ios-sec);
+}
+
+html.dark .bg-gray-50 {
+    background-color: var(--ios-bg);
+}
+
+html.dark .bg-gradient-to-br {
+    background-image: none;
+    background-color: var(--ios-sec);
+}
+
+html.dark .modal-glass {
+    background-color: rgba(28, 28, 30, 0.7);
+}
+
 /* =============================================
    ANIMATIONS SYSTEM
    ============================================= */

@@ -1,5 +1,5 @@
 /**
- * Gestión de Inventario Doméstico — v3.0 Profesional
+ * SmartInventory — v4.0 Profesional
  * PWA + Vanilla JS + IndexedDB + OpenFoodFacts
  */
 
@@ -805,7 +805,7 @@ const Scanner = {
         }
     },
 
-    start() {
+    async start() {
         this.init();
         Utils.haptic('medium');
 
@@ -825,34 +825,52 @@ const Scanner = {
 
         const config = { fps: 15, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 };
 
-        html5QrCode.start(
-            { facingMode: "environment" },
-            config,
-            (decodedText, decodedResult) => {
-                // Immediately play beep and trigger haptic
-                this.playBeep();
-                Utils.haptic('success');
+        const onScanSuccess = (decodedText, decodedResult) => {
+            // Immediately play beep and trigger haptic
+            this.playBeep();
+            Utils.haptic('success');
 
-                // Flash the scanner frame green
-                const frame = document.querySelector('.scanner-frame');
-                if (frame) frame.classList.add('detected');
+            // Flash the scanner frame green
+            const frame = document.querySelector('.scanner-frame');
+            if (frame) frame.classList.add('detected');
 
-                // Stop camera but keep modal open for processing animation
-                if (html5QrCode && html5QrCode.isScanning) {
-                    html5QrCode.stop().catch(err => console.error(err));
-                }
-
-                // Start the staged processing flow
-                this._runProcessingFlow(decodedText);
-            },
-            (errorMessage) => {
-                // Ignore errors (scanning empty frames)
+            // Stop camera but keep modal open for processing animation
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().catch(err => console.error(err));
             }
-        ).catch(err => {
-            console.error(err);
-            UI.toggleModal('modal-scanner', false);
-            Swal.fire('Error', 'No se pudo acceder a la cámara. Revisa los permisos.', 'error');
-        });
+
+            // Start the staged processing flow
+            this._runProcessingFlow(decodedText);
+        };
+
+        const onScanFailure = (errorMessage) => {
+            // Ignore errors (scanning empty frames)
+        };
+
+        try {
+            // Fix iOS Safari constraints bug by explicitly querying camera IDs
+            const cameras = await Html5Qrcode.getCameras();
+            let camId = null;
+            if (cameras && cameras.length > 0) {
+                // Try to find the rear/back camera
+                const rearCamera = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('trasera'));
+                camId = rearCamera ? rearCamera.id : cameras[cameras.length - 1].id;
+            }
+
+            const cameraConfig = camId ? camId : { facingMode: "environment" };
+            await html5QrCode.start(cameraConfig, config, onScanSuccess, onScanFailure);
+            
+        } catch (err) {
+            console.warn("Could not query cameras explicitly, attempting fallback...", err);
+            try {
+                // Fallback to auto-selecting environment camera
+                await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure);
+            } catch (fallbackErr) {
+                console.error(fallbackErr);
+                UI.toggleModal('modal-scanner', false);
+                Swal.fire('Error', 'No se pudo acceder a la cámara. Revisa los permisos en tu dispositivo.', 'error');
+            }
+        }
     },
 
     /** Staged processing animation flow — ~5 seconds total */
@@ -1303,13 +1321,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             toggleMenu(false);
 
             const titleMap = {
-                'view-dashboard': 'Inventario',
+                'view-dashboard': 'SmartInventory',
                 'view-inventory': 'Lista',
                 'view-history': 'Historial',
                 'view-shopping': 'Compras',
                 'view-about': 'Acerca de'
             };
-            document.querySelector('header h1').innerText = titleMap[target] || 'Inventario';
+            document.querySelector('header h1').innerText = titleMap[target] || 'SmartInventory';
         });
     });
 
@@ -1450,6 +1468,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         e.target.value = '';
     });
+
+    // Dark Mode Toggle
+    const htmlEl = document.documentElement;
+    const btnDarkMode = document.getElementById('btn-dark-mode');
+    const darkModeIcon = document.getElementById('dark-mode-icon');
+    
+    // Check initial state
+    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        htmlEl.classList.add('dark');
+        darkModeIcon.classList.remove('fa-moon');
+        darkModeIcon.classList.add('fa-sun');
+    }
+
+    btnDarkMode?.addEventListener('click', () => {
+        Utils.haptic('light');
+        htmlEl.classList.toggle('dark');
+        if (htmlEl.classList.contains('dark')) {
+            localStorage.setItem('theme', 'dark');
+            darkModeIcon.classList.remove('fa-moon');
+            darkModeIcon.classList.add('fa-sun');
+        } else {
+            localStorage.setItem('theme', 'light');
+            darkModeIcon.classList.remove('fa-sun');
+            darkModeIcon.classList.add('fa-moon');
+        }
+    });
+
 });
 
 // Registrar Service Worker para PWA

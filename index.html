@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Inventario Diego Culajay</title>
+    <title>SmartInventory</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ffffff">
     <meta name="description"
@@ -25,12 +25,12 @@
                     },
                     colors: {
                         ios: {
-                            bg: '#FFFFFF',
-                            sec: '#F8F9FA',
-                            textTitle: '#111111',
-                            textSub: '#8E8E93',
-                            border: '#E5E5EA',
-                            black: '#000000'
+                            bg: 'var(--ios-bg)',
+                            sec: 'var(--ios-sec)',
+                            textTitle: 'var(--ios-textTitle)',
+                            textSub: 'var(--ios-textSub)',
+                            border: 'var(--ios-border)',
+                            black: 'var(--ios-black)'
                         },
                         status: {
                             safe: '#34C759',
@@ -49,28 +49,47 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
     <style>
+        :root {
+            --ios-bg: #FFFFFF;
+            --ios-sec: #F8F9FA;
+            --ios-textTitle: #111111;
+            --ios-textSub: #8E8E93;
+            --ios-border: #E5E5EA;
+            --ios-black: #000000;
+        }
+
+        html.dark {
+            --ios-bg: #000000;
+            --ios-sec: #1C1C1E;
+            --ios-textTitle: #FFFFFF;
+            --ios-textSub: #98989D;
+            --ios-border: #38383A;
+            --ios-black: #FFFFFF;
+        }
+
         body {
-            background-color: #FFFFFF;
-            color: #111111;
+            background-color: var(--ios-bg);
+            color: var(--ios-textTitle);
         }
 
         .ios-input {
             border: none;
-            border-bottom: 1.5px solid #E5E5EA;
+            border-bottom: 1.5px solid var(--ios-border);
             border-radius: 0;
             background: transparent;
             padding: 14px 0;
             outline: none;
             transition: border-color 0.3s cubic-bezier(0.22, 1, 0.36, 1);
             font-size: 16px;
+            color: var(--ios-textTitle);
         }
 
         .ios-input:focus {
-            border-bottom-color: #000000;
+            border-bottom-color: var(--ios-black);
         }
 
         .ios-input::placeholder {
-            color: #C7C7CC;
+            color: var(--ios-textSub);
         }
     </style>
 </head>
@@ -85,8 +104,10 @@
                 class="p-2 -ml-2 text-ios-textTitle focus:outline-none active:scale-90 transition-transform">
                 <i class="fa-solid fa-bars text-xl"></i>
             </button>
-            <h1 class="font-bold text-lg tracking-tight text-ios-textTitle">Inventario</h1>
-            <div class="w-8"></div>
+            <h1 class="font-bold text-lg tracking-tight text-ios-textTitle">SmartInventory</h1>
+            <button id="btn-dark-mode" class="p-2 -mr-2 text-ios-textTitle focus:outline-none active:scale-90 transition-transform w-8 flex justify-end">
+                <i class="fa-solid fa-moon text-lg" id="dark-mode-icon"></i>
+            </button>
         </div>
     </header>
 
@@ -100,7 +121,7 @@
                 <div class="w-12 h-12 bg-black rounded-2xl flex items-center justify-center mb-3 shadow-lg">
                     <i class="fa-solid fa-boxes-stacked text-white text-lg"></i>
                 </div>
-                <h2 class="text-xl font-extrabold text-ios-textTitle">Inventario</h2>
+                <h2 class="text-xl font-extrabold text-ios-textTitle">SmartInventory</h2>
                 <p class="text-xs text-ios-textSub font-medium mt-0.5">Diego Culajay</p>
             </div>
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'inventory-app-v3.1-pro';
+const CACHE_NAME = 'smartinventory-app-v4.0';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
