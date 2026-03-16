@@ -702,46 +702,6 @@ const UI = {
         this.processProduct(id, action);
     },
 
-    async generateRecipePrompt() {
-        const products = await Logic.loadActiveInventory();
-        const alerts = products.filter(p => p.statusObj === 'danger' || p.statusObj === 'warning').map(p => p.name);
-        const safe = products.filter(p => p.statusObj === 'safe').map(p => p.name);
-
-        if (products.length === 0) {
-            Swal.fire('Inventario Vacío', 'Agrega productos primero para obtener sugerencias.', 'info');
-            return;
-        }
-
-        let pt = "Tengo estos ingredientes en mi inventario:\\n\\n";
-        if (alerts.length > 0) pt += "Por vencer / Urgentes:\\n- " + alerts.join("\\n- ") + "\\n\\n";
-        pt += "Otros ingredientes:\\n- " + (safe.length > 0 ? safe.join("\\n- ") : "Ninguno") + "\\n\\n";
-        pt += "¿Qué receta puedo cocinar hoy para aprovechar especialmente los urgentes?";
-
-        Swal.fire({
-            title: '🍳 Chef Inteligente',
-            html: `
-                <div class="text-left bg-gray-50 p-4 rounded-2xl text-sm text-ios-textTitle mb-4 max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-xs">${pt}</div>
-                <p class="text-xs text-ios-textSub font-medium">Copia este texto y pégalo en ChatGPT para obtener ideas increíbles.</p>
-            `,
-            icon: 'info',
-            showCancelButton: true,
-            confirmButtonText: '<i class="fa-solid fa-copy"></i> Copiar',
-            cancelButtonText: '<i class="fa-solid fa-up-right-from-square"></i> Abrir ChatGPT',
-            cancelButtonColor: '#34C759',
-            confirmButtonColor: '#000000',
-        }).then((result) => {
-            if (result.isConfirmed) {
-                navigator.clipboard.writeText(pt).then(() => {
-                    Swal.fire({ title: '¡Copiado!', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 1200 });
-                });
-            } else if (result.dismiss === Swal.DismissReason.cancel) {
-                navigator.clipboard.writeText(pt).then(() => {
-                    window.open('https://chatgpt.com/', '_blank');
-                });
-            }
-        });
-    },
-
     // --- Modal Navigation ---
     toggleModal(modalId, show) {
         const modal = document.getElementById(modalId);
@@ -823,7 +783,11 @@ const Scanner = {
 
         UI.toggleModal('modal-scanner', true);
 
-        const config = { fps: 15, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 };
+        const config = { 
+            fps: 25, // Mayor tasa de cuadros para escaneo más rápido
+            qrbox: { width: 260, height: 180 }, 
+            aspectRatio: 1.0,
+        };
 
         const onScanSuccess = (decodedText, decodedResult) => {
             // Immediately play beep and trigger haptic
@@ -848,25 +812,20 @@ const Scanner = {
         };
 
         try {
-            // Fix iOS Safari constraints bug by explicitly querying camera IDs
-            const cameras = await Html5Qrcode.getCameras();
-            let camId = null;
-            if (cameras && cameras.length > 0) {
-                // Try to find the rear/back camera
-                const rearCamera = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('trasera'));
-                camId = rearCamera ? rearCamera.id : cameras[cameras.length - 1].id;
-            }
-
-            const cameraConfig = camId ? camId : { facingMode: "environment" };
+            // Configuración avanzada para iOS y Android (mayor resolución y autoenfoque)
+            const cameraConfig = {
+                facingMode: { ideal: "environment" }
+            };
+            
             await html5QrCode.start(cameraConfig, config, onScanSuccess, onScanFailure);
             
         } catch (err) {
-            console.warn("Could not query cameras explicitly, attempting fallback...", err);
+            console.warn("Fallo al iniciar con restricciones avanzadas, usando modo de compatibilidad...", err);
             try {
-                // Fallback to auto-selecting environment camera
+                // Fallback 1: String directo (muy compatible en Safari iOS viejo)
                 await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure);
             } catch (fallbackErr) {
-                console.error(fallbackErr);
+                console.error("Fallback también falló:", fallbackErr);
                 UI.toggleModal('modal-scanner', false);
                 Swal.fire('Error', 'No se pudo acceder a la cámara. Revisa los permisos en tu dispositivo.', 'error');
             }
@@ -1450,12 +1409,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         Utils.haptic('medium');
         await Logic.clearCheckedShopping();
         UI.refreshAll();
-    });
-
-    // Gourmet button
-    document.getElementById('btn-gourmet')?.addEventListener('click', () => {
-        Utils.haptic('light');
-        UI.generateRecipePrompt();
     });
 
     const fileInput = document.getElementById('excel-file-input');
