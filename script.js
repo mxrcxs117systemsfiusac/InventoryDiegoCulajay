@@ -790,9 +790,8 @@ const Scanner = {
         UI.toggleModal('modal-scanner', true);
 
         const config = { 
-            fps: 25, // Mayor tasa de cuadros para escaneo más rápido
-            qrbox: { width: 260, height: 180 }, 
-            aspectRatio: 1.0,
+            fps: 15, // Tasa adecuada para rendimiento y compatibilidad
+            qrbox: { width: 260, height: 180 }
         };
 
         const onScanSuccess = (decodedText, decodedResult) => {
@@ -818,35 +817,30 @@ const Scanner = {
         };
 
         try {
-            // Intento 1: Obtener la cámara trasera por ID (Más robusto en Android/iOS Safari moderno)
-            const cameras = await Html5Qrcode.getCameras();
-            if (cameras && cameras.length > 0) {
-                let backCamera = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('trasera'));
-                let cameraId = backCamera ? backCamera.id : cameras[cameras.length - 1].id;
-                await html5QrCode.start(cameraId, config, onScanSuccess, onScanFailure);
-                return;
-            }
-        } catch (err) {
-            console.warn("No se pudieron enumerar las cámaras:", err);
-        }
-
-        try {
-            // Intento 2: facingMode environment como string (Compatibilidad Safari iOS clásico)
+            // Intento 1: facingMode "environment" - Método nativo web más compatible con iOS y Safari Clásico
             await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure);
         } catch (err) {
-            console.warn("Fallo con facingMode environment:", err);
+            console.warn("Fallo con facingMode environment, intentando con getCameras:", err);
+            
             try {
-                // Intento 3: ideal environment
-                await html5QrCode.start({ facingMode: { ideal: "environment" } }, config, onScanSuccess, onScanFailure);
+                // Intento 2: Obtener la cámara trasera enumerada (Android / Chrome)
+                const cameras = await Html5Qrcode.getCameras();
+                if (cameras && cameras.length > 0) {
+                    let backCamera = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('trasera'));
+                    let cameraId = backCamera ? backCamera.id : cameras[cameras.length - 1].id;
+                    await html5QrCode.start(cameraId, config, onScanSuccess, onScanFailure);
+                } else {
+                    throw new Error("No cameras found");
+                }
             } catch (fallbackErr) {
-                console.error("Fallback también falló:", fallbackErr);
+                console.error("Fallaron todos los intentos de cámara:", fallbackErr);
                 UI.toggleModal('modal-scanner', false);
-                Swal.fire('Error', 'No se pudo acceder a la cámara. Revisa los permisos en tu navegador/dispositivo.', 'error');
+                Swal.fire('Error', 'No se pudo acceder a la cámara. Revisa los permisos en tu navegador (Safari/Chrome).', 'error');
             }
         }
     },
 
-    /** Staged processing animation flow — ~5 seconds total */
+    /** Staged processing animation flow — ~1 second total */
     async _runProcessingFlow(barcode) {
         const overlay = document.getElementById('scan-processing-overlay');
         const statusText = document.getElementById('scan-status-text');
@@ -860,23 +854,23 @@ const Scanner = {
         // Show the overlay
         overlay.classList.remove('hidden');
 
-        // STAGE 1: "Detectando código…" (400ms)
+        // STAGE 1: "Detectando código…" (150ms)
         statusText.textContent = 'Detectando código…';
         statusIcon.innerHTML = '<i class="fa-solid fa-barcode text-4xl text-white"></i>';
         statusIcon.className = 'scan-status-icon';
         progressFill.style.width = '20%';
         progressFill.className = 'scan-progress-fill';
 
-        await this._delay(400);
+        await this._delay(150);
 
-        // STAGE 2: "Escaneando…" (400ms)
+        // STAGE 2: "Escaneando…" (150ms)
         statusText.textContent = 'Escaneando producto: ' + barcode;
         statusIcon.innerHTML = '<i class="fa-solid fa-qrcode text-4xl text-white"></i>';
         progressFill.style.width = '50%';
 
-        await this._delay(400);
+        await this._delay(150);
 
-        // STAGE 3: "Buscando producto…" (API call + minimum 400ms)
+        // STAGE 3: "Buscando producto…" (API call + minimum 200ms)
         statusText.textContent = 'Buscando producto…';
         statusIcon.innerHTML = '<i class="fa-solid fa-magnifying-glass text-4xl text-white fa-beat-fade"></i>';
         progressFill.style.width = '75%';
@@ -884,7 +878,7 @@ const Scanner = {
         // Fetch product data from API (with minimum animation time)
         const [productData] = await Promise.all([
             BarcodeAPI.lookupAsync(barcode),
-            this._delay(400)
+            this._delay(200)
         ]);
 
         if (productData && productData.name) {
@@ -892,10 +886,10 @@ const Scanner = {
             if (productData.imageUrl) {
                 const img = new Image();
                 img.src = productData.imageUrl;
-                await Promise.race([new Promise(r => { img.onload = r; img.onerror = r; }), this._delay(800)]);
+                await Promise.race([new Promise(r => { img.onload = r; img.onerror = r; }), this._delay(300)]);
             }
 
-            // STAGE 4 — SUCCESS: "¡Producto encontrado!" (1.2s visible)
+            // STAGE 4 — SUCCESS: "¡Producto encontrado!" (600ms visible)
             progressFill.style.width = '100%';
             statusText.textContent = '¡Producto encontrado!';
             statusIcon.innerHTML = '<i class="fa-solid fa-circle-check text-4xl text-status-safe"></i>';
@@ -916,9 +910,9 @@ const Scanner = {
             document.getElementById('prod-barcode').value = barcode;
             BarcodeAPI._applyData(productData);
 
-            await this._delay(1200);
+            await this._delay(600);
         } else {
-            // STAGE 4 — ERROR: "Producto no encontrado" (1.5s visible)
+            // STAGE 4 — ERROR: "Producto no encontrado" (800ms visible)
             progressFill.style.width = '100%';
             progressFill.classList.add('error');
             statusText.textContent = 'Producto no encontrado';
@@ -933,7 +927,7 @@ const Scanner = {
 
             document.getElementById('prod-barcode').value = barcode;
 
-            await this._delay(1500);
+            await this._delay(800);
         }
 
         // Close scanner modal
