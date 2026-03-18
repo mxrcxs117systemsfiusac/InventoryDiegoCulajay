@@ -105,9 +105,7 @@
                 <i class="fa-solid fa-bars text-xl"></i>
             </button>
             <h1 class="font-bold text-lg tracking-tight text-ios-textTitle">SmartInventory</h1>
-            <button id="btn-dark-mode" class="p-2 -mr-2 text-ios-textTitle focus:outline-none active:scale-90 transition-transform w-8 flex justify-end">
-                <i class="fa-solid fa-moon text-lg" id="dark-mode-icon"></i>
-            </button>
+            <div class="w-8"></div> <!-- Spacer for alignment -->
         </div>
     </header>
 
@@ -352,6 +350,12 @@
                         <span class="text-ios-textSub">Carrera</span>
                         <span class="font-bold text-ios-textTitle text-right">Ingeniería Industrial</span>
                     </div>
+                </div>
+
+                <div class="mt-8 relative z-10">
+                    <button id="btn-clear-data" class="w-full bg-red-50 text-status-danger font-bold rounded-2xl px-5 py-3.5 transition-all active:scale-95 flex items-center justify-center gap-2 border border-red-100 shadow-sm">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Borrar Todos los Datos
+                    </button>
                 </div>
             </div>
         </section>

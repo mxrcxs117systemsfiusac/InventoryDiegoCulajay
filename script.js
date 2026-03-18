@@ -168,6 +168,12 @@ const db = {
             request.onsuccess = () => resolve();
             request.onerror = () => reject(request.error);
         });
+    },
+
+    async clearAllData() {
+        await this.clear(STORE_PRODUCTS);
+        await this.clear(STORE_HISTORY);
+        await this.clear(STORE_SHOPPING);
     }
 };
 
@@ -812,22 +818,30 @@ const Scanner = {
         };
 
         try {
-            // Configuración avanzada para iOS y Android (mayor resolución y autoenfoque)
-            const cameraConfig = {
-                facingMode: { ideal: "environment" }
-            };
-            
-            await html5QrCode.start(cameraConfig, config, onScanSuccess, onScanFailure);
-            
+            // Intento 1: Obtener la cámara trasera por ID (Más robusto en Android/iOS Safari moderno)
+            const cameras = await Html5Qrcode.getCameras();
+            if (cameras && cameras.length > 0) {
+                let backCamera = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('trasera'));
+                let cameraId = backCamera ? backCamera.id : cameras[cameras.length - 1].id;
+                await html5QrCode.start(cameraId, config, onScanSuccess, onScanFailure);
+                return;
+            }
         } catch (err) {
-            console.warn("Fallo al iniciar con restricciones avanzadas, usando modo de compatibilidad...", err);
+            console.warn("No se pudieron enumerar las cámaras:", err);
+        }
+
+        try {
+            // Intento 2: facingMode environment como string (Compatibilidad Safari iOS clásico)
+            await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure);
+        } catch (err) {
+            console.warn("Fallo con facingMode environment:", err);
             try {
-                // Fallback 1: String directo (muy compatible en Safari iOS viejo)
-                await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure);
+                // Intento 3: ideal environment
+                await html5QrCode.start({ facingMode: { ideal: "environment" } }, config, onScanSuccess, onScanFailure);
             } catch (fallbackErr) {
                 console.error("Fallback también falló:", fallbackErr);
                 UI.toggleModal('modal-scanner', false);
-                Swal.fire('Error', 'No se pudo acceder a la cámara. Revisa los permisos en tu dispositivo.', 'error');
+                Swal.fire('Error', 'No se pudo acceder a la cámara. Revisa los permisos en tu navegador/dispositivo.', 'error');
             }
         }
     },
@@ -1422,29 +1436,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         e.target.value = '';
     });
 
-    // Dark Mode Toggle
-    const htmlEl = document.documentElement;
-    const btnDarkMode = document.getElementById('btn-dark-mode');
-    const darkModeIcon = document.getElementById('dark-mode-icon');
-    
-    // Check initial state
-    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-        htmlEl.classList.add('dark');
-        darkModeIcon.classList.remove('fa-moon');
-        darkModeIcon.classList.add('fa-sun');
-    }
+    // Clear All Data
+    document.getElementById('btn-clear-data')?.addEventListener('click', async () => {
+        Utils.haptic('medium');
+        const result = await Swal.fire({
+            title: '¿Estás seguro?',
+            text: 'Esto borrará permanentemente todo tu inventario, historial y compras. Esta acción no se puede deshacer.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#FF3B30',
+            cancelButtonColor: '#8E8E93',
+            confirmButtonText: 'Sí, borrar todo',
+            cancelButtonText: 'Cancelar'
+        });
 
-    btnDarkMode?.addEventListener('click', () => {
-        Utils.haptic('light');
-        htmlEl.classList.toggle('dark');
-        if (htmlEl.classList.contains('dark')) {
-            localStorage.setItem('theme', 'dark');
-            darkModeIcon.classList.remove('fa-moon');
-            darkModeIcon.classList.add('fa-sun');
-        } else {
-            localStorage.setItem('theme', 'light');
-            darkModeIcon.classList.remove('fa-sun');
-            darkModeIcon.classList.add('fa-moon');
+        if (result.isConfirmed) {
+            await db.clearAllData();
+            await UI.refreshAll();
+            Swal.fire({
+                title: 'Borrados',
+                text: 'Todos los datos han sido eliminados de este dispositivo.',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false
+            });
+            UI.navigate('view-dashboard');
         }
     });
 
