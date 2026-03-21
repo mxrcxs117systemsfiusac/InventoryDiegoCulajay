@@ -504,7 +504,11 @@
         <!-- Camera feed area -->
         <div class="flex-1 w-full relative flex items-center justify-center overflow-hidden bg-black"
             id="scanner-container">
-            <div id="reader" class="w-full max-w-lg mx-auto overflow-hidden"></div>
+            <!-- Native video element for camera feed (iOS-first) -->
+            <video id="scanner-video" playsinline autoplay muted
+                class="w-full h-full object-cover"></video>
+            <!-- Hidden canvas for ZXing frame capture -->
+            <canvas id="scanner-canvas" class="hidden"></canvas>
 
             <!-- Scanning overlay with animated frame -->
             <div class="scanner-vignette"></div>
@@ -546,7 +550,7 @@
 
     <!-- Scripts CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js" type="text/javascript"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smartinventory-app-v4.0';
+const CACHE_NAME = 'smartinventory-app-v5.0';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -10,7 +10,7 @@ const ASSETS_TO_CACHE = [
     'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
     'https://cdn.jsdelivr.net/npm/chart.js',
-    'https://unpkg.com/html5-qrcode',
+    'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js',
     'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js',
     'https://cdn.jsdelivr.net/npm/sweetalert2@11'
 ];

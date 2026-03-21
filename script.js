@@ -16,7 +16,6 @@ const STORE_SHOPPING = 'shopping_list';
 // Estado global
 let chartCategory = null;
 let chartExpired = null;
-let html5QrCode = null;
 let currentView = 'view-dashboard';
 let _barcodeDebounce = null;
 
@@ -748,16 +747,14 @@ const UI = {
 window.UI = UI;
 
 // ==========================================
-// 6. ESCÁNER DE CÓDIGO DE BARRAS — Enhanced
+// 6. ESCÁNER DE CÓDIGO DE BARRAS — iOS-First Rewrite
+//    Uses @zxing/browser BrowserMultiFormatReader for maximum iOS compatibility
 // ==========================================
 const Scanner = {
-    _audioCtx: null,
-
-    init() {
-        if (!html5QrCode) {
-            html5QrCode = new Html5Qrcode("reader");
-        }
-    },
+    _stream: null,
+    _scanLoopId: null,
+    _scanning: false,
+    _beepAudio: null,
 
     /** Play beep sound from assets */
     async playBeep() {
@@ -772,71 +769,232 @@ const Scanner = {
     },
 
     async start() {
-        this.init();
         Utils.haptic('medium');
 
         // Unlock audio on user interaction (bypasses iOS/Chrome Autoplay policies)
         if (!this._beepAudio) {
             this._beepAudio = new Audio('assets/scanner-beep.wav');
         }
-        this._beepAudio.play().then(() => {
+        try {
+            await this._beepAudio.play();
             this._beepAudio.pause();
             this._beepAudio.currentTime = 0;
-        }).catch(err => console.warn('Audio unlock failed:', err));
+        } catch (e) {
+            console.warn('Audio unlock failed:', e);
+        }
 
         // Reset processing overlay
         this._resetOverlay();
 
+        // Show scanner modal
         UI.toggleModal('modal-scanner', true);
 
-        const config = { 
-            fps: 15, // Tasa adecuada para rendimiento y compatibilidad
-            qrbox: { width: 260, height: 180 }
-        };
+        const video = document.getElementById('scanner-video');
+        const canvas = document.getElementById('scanner-canvas');
 
-        const onScanSuccess = (decodedText, decodedResult) => {
-            // Immediately play beep and trigger haptic
-            this.playBeep();
-            Utils.haptic('success');
+        if (!video || !canvas) {
+            console.error('Scanner elements not found');
+            UI.toggleModal('modal-scanner', false);
+            return;
+        }
 
-            // Flash the scanner frame green
-            const frame = document.querySelector('.scanner-frame');
-            if (frame) frame.classList.add('detected');
-
-            // Stop camera but keep modal open for processing animation
-            if (html5QrCode && html5QrCode.isScanning) {
-                html5QrCode.stop().catch(err => console.error(err));
+        // ============================================
+        // iOS-FIRST CAMERA ACCESS
+        // ============================================
+        // Strategy: Use facingMode 'environment' (ideal, not exact)
+        // iOS Safari rejects 'exact' if only one camera exists.
+        // We request lower resolution first for performance on mobile.
+        const cameraConfigs = [
+            // Attempt 1: Back camera, moderate resolution
+            {
+                video: {
+                    facingMode: 'environment',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                },
+                audio: false
+            },
+            // Attempt 2: Back camera, lower resolution (older iPhones)
+            {
+                video: {
+                    facingMode: 'environment',
+                    width: { ideal: 640 },
+                    height: { ideal: 480 }
+                },
+                audio: false
+            },
+            // Attempt 3: Any camera, no constraints
+            {
+                video: true,
+                audio: false
             }
+        ];
 
-            // Start the staged processing flow
-            this._runProcessingFlow(decodedText);
-        };
-
-        const onScanFailure = (errorMessage) => {
-            // Ignore errors (scanning empty frames)
-        };
-
-        try {
-            // Intento 1: facingMode "environment" - Método nativo web más compatible con iOS y Safari Clásico
-            await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure);
-        } catch (err) {
-            console.warn("Fallo con facingMode environment, intentando con getCameras:", err);
-            
+        let stream = null;
+        for (const constraints of cameraConfigs) {
             try {
-                // Intento 2: Obtener la cámara trasera enumerada (Android / Chrome)
-                const cameras = await Html5Qrcode.getCameras();
-                if (cameras && cameras.length > 0) {
-                    let backCamera = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('trasera'));
-                    let cameraId = backCamera ? backCamera.id : cameras[cameras.length - 1].id;
-                    await html5QrCode.start(cameraId, config, onScanSuccess, onScanFailure);
-                } else {
-                    throw new Error("No cameras found");
-                }
-            } catch (fallbackErr) {
-                console.error("Fallaron todos los intentos de cámara:", fallbackErr);
-                UI.toggleModal('modal-scanner', false);
-                Swal.fire('Error', 'No se pudo acceder a la cámara. Revisa los permisos en tu navegador (Safari/Chrome).', 'error');
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                break; // Success — stop trying
+            } catch (err) {
+                console.warn('Camera attempt failed:', constraints, err);
             }
+        }
+
+        if (!stream) {
+            UI.toggleModal('modal-scanner', false);
+            Swal.fire('Error', 'No se pudo acceder a la cámara. Revisa los permisos en tu navegador (Safari/Chrome).', 'error');
+            return;
+        }
+
+        this._stream = stream;
+
+        // ============================================
+        // ATTACH STREAM TO VIDEO — iOS CRITICAL ATTRIBUTES
+        // ============================================
+        // playsinline: REQUIRED on iOS to prevent fullscreen
+        // autoplay + muted: REQUIRED for autoplay on iOS Safari
+        video.setAttribute('playsinline', '');
+        video.setAttribute('autoplay', '');
+        video.setAttribute('muted', '');
+        video.muted = true;
+        video.srcObject = stream;
+
+        // Wait for video to actually start playing
+        await new Promise((resolve) => {
+            const onPlaying = () => {
+                video.removeEventListener('playing', onPlaying);
+                resolve();
+            };
+            video.addEventListener('playing', onPlaying);
+            video.play().catch(() => {
+                // iOS may block play() without user gesture — resolve anyway
+                resolve();
+            });
+            // Safety timeout (iOS can be slow to start camera)
+            setTimeout(resolve, 4000);
+        });
+
+        // Small delay to let the camera stabilize (iOS needs this)
+        await new Promise(r => setTimeout(r, 300));
+
+        // ============================================
+        // START SCAN LOOP — Canvas frame capture + ZXing decode
+        // ============================================
+        this._scanning = true;
+        this._startScanLoop(video, canvas);
+    },
+
+    /**
+     * Scan loop: captures video frames onto a hidden canvas,
+     * converts to luminance, and runs ZXing MultiFormatReader.
+     * Runs at ~10 fps (100ms intervals) for fast detection.
+     */
+    _startScanLoop(video, canvas) {
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        let lastScanTime = 0;
+        const SCAN_INTERVAL_MS = 100; // 10 scans/second
+
+        // Create ZXing reader with barcode format hints
+        let reader;
+        try {
+            const hints = new Map();
+            const formats = [
+                ZXing.BarcodeFormat.EAN_13,
+                ZXing.BarcodeFormat.EAN_8,
+                ZXing.BarcodeFormat.UPC_A,
+                ZXing.BarcodeFormat.UPC_E,
+                ZXing.BarcodeFormat.CODE_128,
+                ZXing.BarcodeFormat.CODE_39,
+                ZXing.BarcodeFormat.CODE_93,
+                ZXing.BarcodeFormat.ITF,
+                ZXing.BarcodeFormat.QR_CODE,
+                ZXing.BarcodeFormat.DATA_MATRIX
+            ];
+            hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+            hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+            reader = new ZXing.MultiFormatReader();
+            reader.setHints(hints);
+        } catch (e) {
+            console.error('Failed to create ZXing reader:', e);
+            this.stop();
+            Swal.fire('Error', 'Error al iniciar el escáner de códigos.', 'error');
+            return;
+        }
+
+        const scanFrame = (timestamp) => {
+            if (!this._scanning) return;
+
+            // Throttle scans
+            if (timestamp - lastScanTime < SCAN_INTERVAL_MS) {
+                this._scanLoopId = requestAnimationFrame(scanFrame);
+                return;
+            }
+            lastScanTime = timestamp;
+
+            // Skip if video isn't ready
+            const vw = video.videoWidth;
+            const vh = video.videoHeight;
+            if (vw === 0 || vh === 0) {
+                this._scanLoopId = requestAnimationFrame(scanFrame);
+                return;
+            }
+
+            // Size canvas to match video
+            if (canvas.width !== vw) canvas.width = vw;
+            if (canvas.height !== vh) canvas.height = vh;
+
+            // Draw video frame to canvas
+            ctx.drawImage(video, 0, 0, vw, vh);
+
+            try {
+                // Create luminance source from canvas
+                const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
+                const binaryBitmap = new ZXing.BinaryBitmap(
+                    new ZXing.HybridBinarizer(luminanceSource)
+                );
+
+                // Attempt decode
+                const result = reader.decode(binaryBitmap);
+
+                if (result && result.getText()) {
+                    // ✓ BARCODE DETECTED
+                    this._scanning = false;
+                    const decodedText = result.getText();
+
+                    this.playBeep();
+                    Utils.haptic('success');
+
+                    // Flash scanner frame green
+                    const frame = document.querySelector('.scanner-frame');
+                    if (frame) frame.classList.add('detected');
+
+                    // Stop camera
+                    this._stopStream();
+
+                    // Run processing animation
+                    this._runProcessingFlow(decodedText);
+                    return;
+                }
+            } catch (e) {
+                // NotFoundException is expected when no barcode is visible — ignore
+            }
+
+            // Continue scanning
+            this._scanLoopId = requestAnimationFrame(scanFrame);
+        };
+
+        this._scanLoopId = requestAnimationFrame(scanFrame);
+    },
+
+    /** Stop camera stream tracks */
+    _stopStream() {
+        if (this._stream) {
+            this._stream.getTracks().forEach(track => track.stop());
+            this._stream = null;
+        }
+        const video = document.getElementById('scanner-video');
+        if (video) {
+            video.srcObject = null;
         }
     },
 
@@ -854,31 +1012,24 @@ const Scanner = {
         // Show the overlay
         overlay.classList.remove('hidden');
 
-        // STAGE 1: "Detectando código…" (150ms)
-        statusText.textContent = 'Detectando código…';
+        // STAGE 1: "Detectando código…" (100ms)
+        statusText.textContent = 'Código detectado';
         statusIcon.innerHTML = '<i class="fa-solid fa-barcode text-4xl text-white"></i>';
         statusIcon.className = 'scan-status-icon';
-        progressFill.style.width = '20%';
+        progressFill.style.width = '30%';
         progressFill.className = 'scan-progress-fill';
 
-        await this._delay(150);
+        await this._delay(100);
 
-        // STAGE 2: "Escaneando…" (150ms)
-        statusText.textContent = 'Escaneando producto: ' + barcode;
-        statusIcon.innerHTML = '<i class="fa-solid fa-qrcode text-4xl text-white"></i>';
-        progressFill.style.width = '50%';
-
-        await this._delay(150);
-
-        // STAGE 3: "Buscando producto…" (API call + minimum 200ms)
-        statusText.textContent = 'Buscando producto…';
+        // STAGE 2: "Buscando producto…" (API call + minimum 100ms)
+        statusText.textContent = 'Buscando: ' + barcode;
         statusIcon.innerHTML = '<i class="fa-solid fa-magnifying-glass text-4xl text-white fa-beat-fade"></i>';
-        progressFill.style.width = '75%';
+        progressFill.style.width = '60%';
 
         // Fetch product data from API (with minimum animation time)
         const [productData] = await Promise.all([
             BarcodeAPI.lookupAsync(barcode),
-            this._delay(200)
+            this._delay(100)
         ]);
 
         if (productData && productData.name) {
@@ -886,16 +1037,15 @@ const Scanner = {
             if (productData.imageUrl) {
                 const img = new Image();
                 img.src = productData.imageUrl;
-                await Promise.race([new Promise(r => { img.onload = r; img.onerror = r; }), this._delay(300)]);
+                await Promise.race([new Promise(r => { img.onload = r; img.onerror = r; }), this._delay(200)]);
             }
 
-            // STAGE 4 — SUCCESS: "¡Producto encontrado!" (600ms visible)
+            // STAGE 3 — SUCCESS
             progressFill.style.width = '100%';
             statusText.textContent = '¡Producto encontrado!';
             statusIcon.innerHTML = '<i class="fa-solid fa-circle-check text-4xl text-status-safe"></i>';
             statusIcon.className = 'scan-status-icon success';
 
-            // Show the result card with product info
             resultName.textContent = productData.name;
             resultBrand.textContent = productData.brand || '';
             if (productData.imageUrl) {
@@ -910,9 +1060,9 @@ const Scanner = {
             document.getElementById('prod-barcode').value = barcode;
             BarcodeAPI._applyData(productData);
 
-            await this._delay(600);
+            await this._delay(500);
         } else {
-            // STAGE 4 — ERROR: "Producto no encontrado" (800ms visible)
+            // STAGE 3 — NOT FOUND
             progressFill.style.width = '100%';
             progressFill.classList.add('error');
             statusText.textContent = 'Producto no encontrado';
@@ -927,7 +1077,7 @@ const Scanner = {
 
             document.getElementById('prod-barcode').value = barcode;
 
-            await this._delay(800);
+            await this._delay(600);
         }
 
         // Close scanner modal
@@ -961,17 +1111,20 @@ const Scanner = {
     },
 
     stop() {
+        this._scanning = false;
+
+        if (this._scanLoopId) {
+            cancelAnimationFrame(this._scanLoopId);
+            this._scanLoopId = null;
+        }
+
+        this._stopStream();
         this._resetOverlay();
+
         const frame = document.querySelector('.scanner-frame');
         if (frame) frame.classList.remove('detected');
 
-        if (html5QrCode && html5QrCode.isScanning) {
-            html5QrCode.stop().then(() => {
-                UI.toggleModal('modal-scanner', false);
-            }).catch(err => console.error(err));
-        } else {
-            UI.toggleModal('modal-scanner', false);
-        }
+        UI.toggleModal('modal-scanner', false);
     }
 };
 

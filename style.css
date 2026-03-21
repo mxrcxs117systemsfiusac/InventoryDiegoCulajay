@@ -644,26 +644,18 @@ body .swal2-popup {
 }
 
 /* =============================================
-   HTML5-QRCODE OVERRIDES
+   SCANNER VIDEO — Native video element styles
    ============================================= */
-#reader {
+#scanner-video {
     width: 100%;
-    border-color: transparent !important;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    inset: 0;
 }
 
-#reader video {
-    object-fit: cover !important;
-    border-radius: 1rem;
-}
-
-/* Hide default library UI */
-#reader__dashboard_section_csr span,
-#reader__dashboard_section_csr button {
-    display: none !important;
-}
-
-#reader__dashboard_section_swaplink {
-    display: none !important;
+#scanner-canvas {
+    display: none;
 }
 
 /* =============================================
