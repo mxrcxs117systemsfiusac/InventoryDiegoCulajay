@@ -502,10 +502,10 @@
         </div>
 
         <!-- Camera feed area -->
-        <div class="flex-1 w-full relative flex items-center justify-center overflow-hidden bg-black"
+        <div class="flex-1 w-full h-full relative flex items-center justify-center overflow-hidden bg-black"
             id="scanner-container">
             <!-- Native video element for camera feed (iOS-first) -->
-            <video id="scanner-video" playsinline autoplay muted
+            <video id="scanner-video" playsinline webkit-playsinline autoplay muted
                 class="w-full h-full object-cover"></video>
             <!-- Hidden canvas for ZXing frame capture -->
             <canvas id="scanner-canvas" class="hidden"></canvas>

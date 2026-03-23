@@ -652,6 +652,10 @@ body .swal2-popup {
     object-fit: cover;
     position: absolute;
     inset: 0;
+    z-index: 10;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    background-color: transparent;
 }
 
 #scanner-canvas {

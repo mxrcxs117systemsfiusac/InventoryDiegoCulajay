@@ -854,6 +854,7 @@ const Scanner = {
         // playsinline: REQUIRED on iOS to prevent fullscreen
         // autoplay + muted: REQUIRED for autoplay on iOS Safari
         video.setAttribute('playsinline', '');
+        video.setAttribute('webkit-playsinline', '');
         video.setAttribute('autoplay', '');
         video.setAttribute('muted', '');
         video.muted = true;
