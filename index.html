@@ -397,13 +397,23 @@
                             <img id="product-image-thumb" src="" alt="Producto"
                                 class="absolute inset-0 w-full h-full object-contain hidden z-10 bg-white">
 
-                            <!-- Scanner Trigger -->
-                            <button type="button" id="btn-scan"
-                                class="absolute inset-0 w-full h-full flex flex-col items-center justify-center text-ios-textSub hover:bg-gray-50 transition active:scale-95 z-0">
-                                <i class="fa-solid fa-camera text-3xl mb-1 text-ios-black"></i>
-                                <span
-                                    class="text-[9px] font-bold uppercase tracking-wider text-ios-black">Escanear</span>
-                            </button>
+                            <!-- Actions Container -->
+                            <div id="product-photo-actions" class="absolute inset-0 w-full h-full flex flex-col z-0 bg-white">
+                                <!-- Scanner Trigger -->
+                                <button type="button" id="btn-scan"
+                                    class="flex-1 w-full flex flex-col items-center justify-center text-ios-textSub hover:bg-gray-50 transition active:scale-95 border-b border-ios-border">
+                                    <i class="fa-solid fa-barcode text-xl mb-0.5 text-ios-black"></i>
+                                    <span class="text-[8px] font-bold uppercase tracking-wider text-ios-black">Escanear</span>
+                                </button>
+                                
+                                <!-- Photo Trigger -->
+                                <button type="button" id="btn-photo"
+                                    class="flex-1 w-full flex flex-col items-center justify-center text-ios-textSub hover:bg-gray-50 transition active:scale-95">
+                                    <i class="fa-solid fa-camera text-xl mb-0.5 text-ios-black"></i>
+                                    <span class="text-[8px] font-bold uppercase tracking-wider text-ios-black">Foto</span>
+                                </button>
+                                <input type="file" id="photo-input" accept="image/*" capture="environment" class="hidden">
+                            </div>
 
                             <div id="product-image-loading"
                                 class="absolute inset-0 bg-white/80 z-20 hidden items-center justify-center">

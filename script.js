@@ -421,10 +421,14 @@ const UI = {
             const escapedCat = Utils.escapeHtml(p.category);
             const priceStr = p.price > 0 ? `Q${p.price.toFixed(2)}` : '';
 
+            const imageHtml = p.imageUrl 
+                ? `<img src="${p.imageUrl}" class="w-full h-full object-cover" alt="Producto">`
+                : `<i class="fa-solid fa-box text-lg"></i>`;
+
             html += `
             <div class="inventory-item bg-white p-4 rounded-2xl border border-ios-border/30 flex items-center gap-4 group animate-card-in shadow-sm hover:shadow-md" style="animation-delay: ${Math.min(i * 40, 400)}ms">
-                <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${iconBg}">
-                    <i class="fa-solid fa-box text-lg"></i>
+                <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden ${iconBg}">
+                    ${imageHtml}
                 </div>
                 
                 <div class="flex-1 min-w-0">
@@ -1496,13 +1500,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         e.preventDefault();
         Utils.haptic('success');
 
+        let imageUrl = null;
+        const imageThumb = document.getElementById('product-image-thumb');
+        if (imageThumb && !imageThumb.classList.contains('hidden') && imageThumb.src) {
+            imageUrl = imageThumb.src;
+        }
+
         const data = {
             barcode: document.getElementById('prod-barcode').value.trim(),
             name: document.getElementById('prod-name').value.trim(),
             brand: document.getElementById('prod-brand').value.trim(),
             category: document.getElementById('prod-category').value,
             price: document.getElementById('prod-price').value,
-            expiryDate: document.getElementById('prod-date').value
+            expiryDate: document.getElementById('prod-date').value,
+            imageUrl: imageUrl
         };
 
         const id = document.getElementById('prod-id').value;
@@ -1539,6 +1550,61 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     document.getElementById('btn-close-scanner').addEventListener('click', () => {
         Scanner.stop();
+    });
+
+    // Photo Capture
+    document.getElementById('btn-photo')?.addEventListener('click', () => {
+        Utils.haptic('medium');
+        document.getElementById('photo-input')?.click();
+    });
+
+    document.getElementById('photo-input')?.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 600;
+                const MAX_HEIGHT = 600;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height;
+                        height = MAX_HEIGHT;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                
+                const imageThumb = document.getElementById('product-image-thumb');
+                const btnRemoveImage = document.getElementById('btn-remove-image');
+                
+                if (imageThumb) {
+                    imageThumb.src = dataUrl;
+                    imageThumb.classList.remove('hidden');
+                }
+                if (btnRemoveImage) btnRemoveImage.classList.remove('hidden');
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+        
+        e.target.value = '';
     });
 
     // Excel
